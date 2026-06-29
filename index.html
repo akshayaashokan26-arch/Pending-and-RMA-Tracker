@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RMA Tracker — GPS & Fleet</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f0f2f5;--surface:#fff;--surface2:#f8f9fa;--text:#1a1a2e;--text2:#555e72;--text3:#8892a4;--border:#e0e4ec;--border2:#c8cdd8;--r:8px;--rl:12px}
+@media(prefers-color-scheme:dark){:root{--bg:#161824;--surface:#1e2130;--surface2:#252840;--text:#e8eaf0;--text2:#9aa3b8;--text3:#626a80;--border:#2e3248;--border2:#3e4460}}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:13px;min-height:100vh}
+.top{background:#0d2137;color:#fff;display:flex;align-items:center;height:50px;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.logo{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;padding-right:18px;border-right:1px solid rgba(255,255,255,.15);margin-right:6px}
+.ttab{background:none;border:none;color:rgba(255,255,255,.5);padding:0 13px;height:50px;cursor:pointer;font-size:12px;border-bottom:2px solid transparent;font-family:inherit;transition:.15s}
+.ttab.on,.ttab:hover{color:#fff}.ttab.on{border-bottom-color:#38bdf8}
+.top-r{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(255,255,255,.6)}
+.dot{width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block}
+.dot.spin{animation:blink .6s infinite}.dot.err{background:#f87171}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.pg{display:none;padding:20px;max-width:1350px;margin:0 auto;width:100%}.pg.on{display:block}
+.tb{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tb h2{font-size:15px;font-weight:600;flex:1}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--r);border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;transition:.15s}
+.btn:hover{background:var(--surface2)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.blue{background:#0d2137;color:#fff;border-color:#0d2137}.btn.blue:hover{background:#163352}
+.btn.green{background:#3b6d11;color:#fff;border-color:#3b6d11}
+.btn.sm{padding:4px 9px;font-size:11px}.btn.red{color:#a32d2d;border-color:#a32d2d}
+.krow{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px}
+.kc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:13px}
+.kl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:500}
+.kv{font-size:22px;font-weight:700;line-height:1.1}
+.kc.blue .kv{color:#185fa5}.kc.green .kv{color:#3b6d11}.kc.red .kv{color:#a32d2d}
+.kc.amber .kv{color:#854f0b}.kc.teal .kv{color:#0f6e56}.kc.gray .kv{color:var(--text2)}.kc.purple .kv{color:#534ab7}
+
+/* Notification banner */
+.notif-bar{background:#fff8e1;border-bottom:2px solid #f59e0b;padding:10px 20px;display:none;align-items:center;gap:12px;font-size:13px}
+.notif-bar.show{display:flex}
+.notif-bar strong{color:#451a03}
+.notif-count{background:#f59e0b;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.filters input,.filters select{font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit}
+.filters input{min-width:200px}
+.cards{display:flex;flex-direction:column;gap:10px}
+
+/* RMA Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;transition:box-shadow .15s}
+.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.card.over{border-left:4px solid #e24b4a}.card.warn{border-left:4px solid #ef9f27}
+.card.ok{border-left:4px solid #639922}.card.done{border-left:4px solid #b4b2a9;opacity:.65}
+.card.zd-pending{box-shadow:0 0 0 2px #3b82f6}
+.card-head{display:flex;align-items:center;gap:10px;padding:12px 15px;cursor:pointer;user-select:none}
+.card-head:hover{background:var(--surface2)}
+.card-info{flex:1;min-width:0}
+.card-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.card-sub{font-size:11px;color:var(--text3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prog{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.pbar{width:72px;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;border:1px solid var(--border)}
+.pfill{height:100%;border-radius:3px;transition:width .3s}
+.pct{font-size:11px;color:var(--text3);min-width:44px;text-align:right}
+.chev{font-size:13px;color:var(--text3);transition:transform .2s}
+.card-body{border-top:1px solid var(--border);padding:16px;display:none}
+
+/* Checklist */
+.cl-steps{display:flex;flex-direction:column;gap:0;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.ci{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.ci:last-child{border-bottom:none}
+.ci:hover{background:var(--surface2)}
+.ci-btns{display:flex;gap:4px;flex-shrink:0}
+.cibtn{width:26px;height:26px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:inherit;transition:.15s;font-weight:600}
+.cibtn:hover{border-color:#185fa5}
+.cibtn.done{background:#3b6d11;border-color:#3b6d11;color:#fff}
+.cibtn.na{background:var(--surface2);border-color:var(--border);color:var(--text3)}
+.ci-label{font-size:12px;line-height:1.4;flex:1;font-weight:500}
+.ci-label.done{text-decoration:line-through;color:var(--text3);font-weight:400}
+.ci-label.na{color:var(--text3);font-style:italic;font-weight:400}
+.ci-note{font-size:10px;color:var(--text3);margin-top:1px}
+
+/* Fields */
+.fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding-top:12px;border-top:1px solid var(--border)}
+@media(max-width:600px){.fgrid{grid-template-columns:1fr 1fr}}
+.fg{display:flex;flex-direction:column;gap:3px}
+.fg.full{grid-column:1/-1}
+.fg label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;font-weight:500}
+.fg input,.fg select,.fg textarea{padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit}
+.fg textarea{resize:vertical;min-height:50px}
+.card-foot{display:flex;justify-content:flex-end;gap:7px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+
+/* Badges */
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;white-space:nowrap}
+.b-blue{background:#e6f1fb;color:#0c447c}.b-green{background:#eaf3de;color:#27500a}
+.b-red{background:#fcebeb;color:#501313}.b-amber{background:#faeeda;color:#412402}
+.b-gray{background:var(--surface2);color:var(--text2)}.b-purple{background:#eeedfe;color:#26215c}
+.b-teal{background:#e1f5ee;color:#04342c}.b-zd{background:#dbeafe;color:#1e40af}
+
+/* Shipping cards */
+.ship-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px;display:flex;align-items:flex-start;gap:12px}
+.ship-card.pending-ship{border-left:4px solid #ef9f27}
+.ship-card.reviewed-ship{border-left:4px solid #639922;opacity:.7}
+.ship-info{flex:1;min-width:0}
+.ship-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.ship-sub{font-size:11px;color:var(--text3)}
+
+/* Modal */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.ov.on{display:flex}
+.modal{background:var(--surface);border-radius:var(--rl);padding:22px;width:min(620px,100%);max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.25)}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:14px}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mf{display:flex;flex-direction:column;gap:3px}
+.mf.full{grid-column:1/-1}
+.mf label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;font-weight:500}
+.mf input,.mf select,.mf textarea{padding:6px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit}
+.mf textarea{resize:vertical;min-height:52px}
+.msec{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--border);grid-column:1/-1}
+.mfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.paste-hint{font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.6}
+#paste-ta{width:100%;height:110px;padding:9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:monospace;font-size:11px;resize:none}
+#paste-preview{font-size:12px;margin-top:8px;min-height:18px}
+
+/* Charts */
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.cw{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:15px}
+.cw h3{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px}
+.tw{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow-x:auto;margin-bottom:14px}
+.tw table{width:100%;border-collapse:collapse;font-size:12px;min-width:680px}
+.tw th{background:var(--surface2);padding:9px 11px;text-align:left;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap}
+.tw td{padding:9px 11px;border-bottom:1px solid var(--border)}
+.tw tr:last-child td{border-bottom:none}
+.tw tbody tr:hover td{background:var(--surface2)}
+.empty{text-align:center;padding:48px 20px;color:var(--text3)}
+.empty i{font-size:36px;display:block;margin-bottom:10px;opacity:.25}
+.toast{position:fixed;bottom:20px;right:20px;background:#0d2137;color:#fff;padding:10px 16px;border-radius:var(--r);font-size:12px;z-index:300;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:340px}
+.toast.on{opacity:1}
+.section-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;display:flex;align-items:center;gap:8px}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+</style>
+</head>
+<body>
+
+<!-- Notification banner -->
+<div class="notif-bar" id="notif-bar">
+  <i class="ti ti-bell-ringing" style="color:#f59e0b;font-size:16px" aria-hidden="true"></i>
+  <span><strong>Pending action required:</strong> <span id="notif-text"></span></span>
+  <span class="notif-count" id="notif-count">0</span>
+</div>
+
+<div class="top">
+  <div class="logo"><i class="ti ti-package-export" aria-hidden="true"></i> RMA Tracker</div>
+  <button class="ttab on" onclick="go('dash',this)">Dashboard</button>
+  <button class="ttab" onclick="go('rma',this)">RMA checklist</button>
+  <button class="ttab" onclick="go('shipping',this)">Shipping orders</button>
+  <button class="ttab" onclick="go('monthly',this)">Monthly report</button>
+  <div class="top-r">
+    <span class="dot" id="dot"></span>
+    <span id="slbl">connecting…</span>
+    <button class="btn sm" style="color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);margin-left:4px" onclick="fullSync()"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="pg on" id="pg-dash">
+  <div class="tb">
+    <h2>Overview</h2>
+<select id="dash-mo" onchange="renderDash()" style="font-size:12px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit"><option value="">All time</option></select>
+  </div>
+  <div class="krow" id="dash-kpis"></div>
+  <div class="cgrid">
+    <div class="cw"><h3>RMA outcomes</h3><div style="position:relative;height:190px"><canvas id="ch1" role="img" aria-label="RMA outcomes">Outcomes.</canvas></div></div>
+    <div class="cw"><h3>Warranty split</h3><div style="position:relative;height:190px"><canvas id="ch2" role="img" aria-label="Warranty">Warranty.</canvas></div></div>
+  </div>
+
+  <!-- Pending actions -->
+  <div class="section-title">⚠ Needs attention</div>
+  <div id="pending-actions" class="cards"></div>
+  <div class="empty" id="pending-empty" style="display:none">
+    <i class="ti ti-circle-check" aria-hidden="true"></i>
+    <p>All clear — nothing pending action right now.</p>
+  </div>
+</div>
+
+<!-- RMA CHECKLIST -->
+<div class="pg" id="pg-rma">
+  <div class="tb">
+    <h2>RMA checklist</h2>
+    <button class="btn blue" onclick="openAdd()"><i class="ti ti-plus" aria-hidden="true"></i> New RMA</button>
+    <button class="btn green" onclick="openPaste('rma')"><i class="ti ti-clipboard" aria-hidden="true"></i> Paste RMA data</button>
+
+    <button class="btn" onclick="fullSync()"><i class="ti ti-refresh" aria-hidden="true"></i> Refresh</button>
+  </div>
+  <div class="filters">
+    <input type="text" id="fs-rma" placeholder="Search ticket, IMEI, customer…" oninput="renderRMA()">
+    <select id="ff-rma-status" onchange="renderRMA()"><option value="">All</option><option value="open">Open</option><option value="overdue">Overdue</option><option value="closed">Closed</option></select>
+    <select id="ff-rma-result" onchange="renderRMA()"><option value="">All results</option><option value="Pass">Passed</option><option value="Fail">Failed</option></select>
+    <select id="ff-rma-mo" onchange="renderRMA()"><option value="">All months</option></select>
+    <select id="ff-rma-inc" onchange="renderRMA()"><option value="">All</option><option value="1">Incomplete only</option></select>
+  </div>
+  <div id="rma-list" class="cards"></div>
+  <div class="empty" id="rma-empty" style="display:none"><i class="ti ti-clipboard" aria-hidden="true"></i><p>No RMA records. Paste data from Job Scheduler Device Status or Completed tab.</p></div>
+</div>
+
+<!-- SHIPPING ORDERS -->
+<div class="pg" id="pg-shipping">
+  <div class="tb">
+    <h2>Shipping orders</h2>
+    <button class="btn green" onclick="openPaste('shipping')"><i class="ti ti-clipboard" aria-hidden="true"></i> Paste shipping data</button>
+    <button class="btn" onclick="fullSync()"><i class="ti ti-refresh" aria-hidden="true"></i> Refresh</button>
+  </div>
+  <div class="filters">
+    <input type="text" id="fs-ship" placeholder="Search ticket, device, name…" oninput="renderShipping()">
+    <select id="ff-ship-status" onchange="renderShipping()"><option value="">All</option><option value="PENDING">Pending</option><option value="REVIEWED">Shipped</option></select>
+    <select id="ff-ship-mo" onchange="renderShipping()"><option value="">All months</option></select>
+  </div>
+  <div id="ship-list" class="cards"></div>
+  <div class="empty" id="ship-empty" style="display:none"><i class="ti ti-truck" aria-hidden="true"></i><p>No shipping orders. Paste data from Job Scheduler shipping tool.</p></div>
+</div>
+
+<!-- MONTHLY REPORT -->
+<div class="pg" id="pg-monthly">
+  <div class="tb">
+    <h2>Monthly report</h2>
+    <select id="m-sel" onchange="renderMonthly()" style="font-size:12px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit"><option value="">All time</option></select>
+    <button class="btn" onclick="window.print()"><i class="ti ti-printer" aria-hidden="true"></i> Print</button>
+  </div>
+  <div class="krow" id="m-kpis"></div>
+  <div class="cw" style="margin-bottom:16px"><h3>Month-over-month</h3><div style="position:relative;height:210px"><canvas id="ch3" role="img" aria-label="Monthly trend">Trend.</canvas></div></div>
+  <div class="tw"><table>
+    <thead><tr>
+      <th>Month</th><th>Total RMAs</th><th>Sent for testing</th><th>Passed</th><th>Failed</th>
+      <th>Replaced</th><th>Advance replacement</th><th>Battery replacement</th>
+      <th>Out of warranty</th><th>OOW replaced</th><th>Shipping orders</th>
+    </tr></thead>
+    <tbody id="m-tbody"></tbody>
+  </table></div>
+</div>
+
+<!-- Add RMA modal -->
+<div class="ov" id="add-ov">
+<div class="modal">
+  <h3 id="add-title">New RMA</h3>
+  <div class="mgrid">
+    <input type="hidden" id="m-id">
+    <div class="msec">Core details</div>
+    <div class="mf"><label>Ticket number *</label><input id="m-ticket" type="text" placeholder="e.g. 1473188"></div>
+    <div class="mf"><label>Date</label><input id="m-date" type="date"></div>
+    <div class="mf"><label>Customer</label><input id="m-customer" type="text"></div>
+    <div class="mf"><label>Device model</label><input id="m-device" type="text" placeholder="MA 1085, M4000…"></div>
+    <div class="mf"><label>IMEI</label><input id="m-imei" type="text"></div>
+    <div class="mf"><label>Warranty</label>
+      <select id="m-warranty"><option value="Unknown">Unknown</option><option value="Warranty">Warranty</option><option value="No Warranty">No Warranty</option></select></div>
+    <div class="msec">Testing & resolution</div>
+    <div class="mf"><label>Test result</label>
+      <select id="m-test"><option value="">Pending</option><option value="Pass">Pass</option><option value="Fail">Fail</option></select></div>
+    <div class="mf"><label>Action taken</label>
+      <select id="m-action"><option value="">Pending</option><option value="Replacement Device Sent">Replacement sent</option><option value="Device Returned to Customer">Fixed & returned</option><option value="Battery Replaced">Battery replaced</option><option value="Advance Replacement">Advance replacement</option></select></div>
+    <div class="mf"><label>New IMEI</label><input id="m-newimei" type="text"></div>
+    <div class="mf"><label>Tracking number</label><input id="m-tracking" type="text"></div>
+    <div class="mf full"><label>Notes</label><textarea id="m-notes"></textarea></div>
+  </div>
+  <div class="mfoot">
+    <button class="btn" onclick="closeAdd()">Cancel</button>
+    <button class="btn blue" onclick="saveModal()"><i class="ti ti-check" aria-hidden="true"></i> Save</button>
+  </div>
+</div>
+</div>
+
+<!-- Paste modal -->
+<div class="ov" id="paste-ov">
+<div class="modal">
+  <h3 id="paste-title">Paste data</h3>
+  <p class="paste-hint" id="paste-hint"></p>
+  <textarea id="paste-ta" placeholder="Click here and press Ctrl+V…"></textarea>
+  <div id="paste-preview"></div>
+  <div class="mfoot">
+    <button class="btn" onclick="closePaste()">Cancel</button>
+    <button class="btn blue" onclick="runImport()"><i class="ti ti-download" aria-hidden="true"></i> Import</button>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCb-3JFa3bXHeYTggbKBk_i2hku2mxwW58",
+  authDomain: "rma-tracker-b5b14.firebaseapp.com",
+  projectId: "rma-tracker-b5b14",
+  storageBucket: "rma-tracker-b5b14.firebasestorage.app",
+  messagingSenderId: "326921140345",
+  appId: "1:326921140345:web:c017e112b1aeb01bf5bca8"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+let rmaRecords  = [];
+let shipOrders  = [];
+let zdTickets   = [];
+let charts      = {};
+let pasteMode   = 'rma';
+
+// Only show data from June 2026 onwards
+const START_DATE = '2026-01';
+function isRecent(r){ const m=mk(r.date||r.syncedAt||''); return m>=START_DATE; }
+
+// ── Firebase helpers ──────────────────────────────────────────────
+async function fetchCol(col){ const s=await getDocs(collection(db,col)); return s.docs.map(d=>({id:d.id,...d.data()})); }
+async function saveDoc(col,r){ await setDoc(doc(db,col,r.id),r); }
+async function delDoc(col,id){ await deleteDoc(doc(db,col,id)); }
+async function saveAll(col,recs){
+  const chunks=[];
+  for(let i=0;i<recs.length;i+=20)chunks.push(recs.slice(i,i+20));
+  for(const chunk of chunks)await Promise.all(chunk.map(r=>setDoc(doc(db,col,r.id),r)));
+}
+
+async function fullSync(){
+  setSyncing(true,'syncing…');
+  try{
+    [rmaRecords,shipOrders,zdTickets]=await Promise.all([fetchCol('rma_records'),fetchCol('ship_orders'),fetchCol('zd_tickets')]);
+    boot();setSyncing(false,'synced '+now());
+  }catch(e){setErr('sync failed');}
+}
+
+function startListen(){
+  onSnapshot(collection(db,'rma_records'),s=>{rmaRecords=s.docs.map(d=>({id:d.id,...d.data()}));boot();setSyncing(false,'live');});
+  onSnapshot(collection(db,'ship_orders'),s=>{shipOrders=s.docs.map(d=>({id:d.id,...d.data()}));renderShipping();updateNotifs();});
+  onSnapshot(collection(db,'zd_tickets'),s=>{zdTickets=s.docs.map(d=>({id:d.id,...d.data()}));renderRMA();updateNotifs();});
+  // Auto-sync Zendesk every 5 minutes
+  syncZendesk();
+  setInterval(syncZendesk, 5*60*1000);
+}
+
+function setSyncing(a,l){document.getElementById('dot').className='dot'+(a?' spin':'');if(l)document.getElementById('slbl').textContent=l;}
+function setErr(m){document.getElementById('dot').className='dot err';document.getElementById('slbl').textContent=m;}
+function now(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+function uid(){return 'r'+Date.now()+Math.random().toString(36).slice(2,6);}
+function mk(d){if(!d)return'';const dt=new Date(d);if(isNaN(dt))return'';return dt.toISOString().slice(0,7);}
+function fmtMk(m){if(!m)return'';const[y,mo]=m.split('-');return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo-1]+' '+y;}
+
+// ── Checklist ────────────────────────────────────────────────────
+const CL=[
+  {id:'c1',l:'Shipping address confirmed with Fleet / customer'},
+  {id:'c2',l:'Shipping label created'},
+  {id:'c3',l:'Replacement device shipped'},
+  {id:'c4',l:'Tracking number sent to Fleet / customer',n:'Critical — must be shared'},
+  {id:'c5',l:'New IMEI added to customer GPS account'},
+  {id:'c6',l:'Device named on GPS platform',n:'Mark N/A if fleet sent a different device'},
+  {id:'c7',l:'Zendesk ticket updated and closed'},
+];
+
+function needsCL(r){return r.devStatus==='Replacement Device Sent'||r.devStatus==='Advance Replacement'||r.testResult==='Fail';}
+function isClosed(r){
+  if(!needsCL(r))return r.devStatus==='Device Returned to Customer'||r.devStatus==='Battery Replaced';
+  return !!((r.cl||{}).c7);
+}
+function pct(r){
+  if(!needsCL(r))return{d:0,t:0,p:100};
+  const d=CL.filter(x=>{const v=(r.cl||{})[x.id];return v==='done'||v==='na';}).length;
+  return{d,t:CL.length,p:Math.round(d/CL.length*100)};
+}
+function daysOpen(r){
+  if(!r.date)return null;
+  const d=new Date(r.date);if(isNaN(d))return null;
+  if(isClosed(r)&&r.shipDate){const e=new Date(r.shipDate);if(!isNaN(e))return Math.round((e-d)/864e5);}
+  return Math.round((Date.now()-d)/864e5);
+}
+function riskOf(r){if(isClosed(r))return'done';const d=daysOpen(r);if(d===null)return'ok';if(d>=15)return'over';if(d>=8)return'warn';return'ok';}
+
+function badge(t,c){return`<span class="badge ${c}">${t}</span>`;}
+function wBadge(w){return w==='Warranty'?badge('Warranty','b-green'):w==='No Warranty'?badge('No Warranty','b-red'):badge('Unknown','b-gray');}
+function resultBadge(r){
+  if(r.devStatus==='Advance Replacement')return badge('Advance replacement','b-purple');
+  if(r.devStatus==='Replacement Device Sent')return badge('Replacement sent','b-amber');
+  if(r.devStatus==='Device Returned to Customer')return badge('Fixed & returned','b-green');
+  if(r.devStatus==='Battery Replaced')return badge('Battery replaced','b-teal');
+  if(r.testResult==='Pass')return badge('Passed','b-green');
+  if(r.testResult==='Fail')return badge('Failed','b-red');
+  return badge('Pending','b-gray');
+}
+function riskBadge(r){return r==='over'?badge('⚠ Overdue','b-red'):r==='warn'?badge('At risk','b-amber'):r==='done'?badge('Closed','b-green'):'';}
+function zdBadge(ticket){
+  const zd=zdTickets.find(z=>z.ticket===ticket);
+  if(!zd)return'';
+  return zd.status==='pending'?badge('ZD: Pending','b-zd'):badge('ZD: '+zd.status,'b-gray');
+}
+
+// ── Notifications ─────────────────────────────────────────────────
+function updateNotifs(){
+  // Find RMAs that need action: replacement sent but checklist incomplete
+  const needsAction=rmaRecords.filter(r=>needsCL(r)&&!isClosed(r));
+  // Find shipping orders that are still pending
+  const pendingShip=shipOrders.filter(s=>s.status==='PENDING');
+  const total=needsAction.length+pendingShip.length;
+  const bar=document.getElementById('notif-bar');
+  if(total>0){
+    bar.classList.add('show');
+    document.getElementById('notif-count').textContent=total;
+    const parts=[];
+    if(needsAction.length)parts.push(`${needsAction.length} RMA${needsAction.length>1?'s':''} need follow-up`);
+    if(pendingShip.length)parts.push(`${pendingShip.length} shipping order${pendingShip.length>1?'s':''} pending`);
+    document.getElementById('notif-text').textContent=parts.join(' · ');
+  }else{
+    bar.classList.remove('show');
+  }
+}
+
+function boot(){
+  // Populate month selects
+  const allMonths=[...new Set([...rmaRecords.filter(isRecent),...shipOrders.filter(isRecent)].map(r=>mk(r.date)).filter(Boolean))].sort().reverse();
+  ['ff-rma-mo','ff-ship-mo','dash-mo','m-sel'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const cur=el.value;
+    el.innerHTML=id==='m-sel'?'<option value="">All time</option>':'<option value="">All months</option>';
+    allMonths.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=fmtMk(m);el.appendChild(o);});
+    if(cur)el.value=cur;
+  });
+  renderDash();renderRMA();renderShipping();updateNotifs();
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────
+function renderDash(){
+  const mf=document.getElementById('dash-mo').value;
+  const rma=mf?rmaRecords.filter(r=>mk(r.date)===mf):rmaRecords.filter(isRecent);
+  const ship=mf?shipOrders.filter(s=>mk(s.date)===mf):shipOrders.filter(isRecent);
+  const total=rma.length;
+  const passed=rma.filter(r=>r.testResult==='Pass').length;
+  const failed=rma.filter(r=>r.testResult==='Fail').length;
+  const replaced=rma.filter(r=>r.devStatus==='Replacement Device Sent').length;
+  const advance=rma.filter(r=>r.devStatus==='Advance Replacement').length;
+  const battery=rma.filter(r=>r.devStatus==='Battery Replaced').length;
+  const oow=rma.filter(r=>r.warranty==='No Warranty').length;
+  const oowRep=rma.filter(r=>r.warranty==='No Warranty'&&(r.devStatus==='Replacement Device Sent'||r.devStatus==='Advance Replacement')).length;
+  const pendingRMA=rma.filter(r=>needsCL(r)&&!isClosed(r)).length;
+  const pendingShip=ship.filter(s=>s.status==='PENDING').length;
+
+  document.getElementById('dash-kpis').innerHTML=[
+    ['blue','Total RMAs',total],
+    ['green','Passed testing',passed],
+    ['red','Failed testing',failed],
+    ['amber','Replaced',replaced+advance],
+    ['teal','Battery replaced',battery],
+    ['red','Out of warranty',oow],
+    ['red','OOW replaced',oowRep],
+    ['amber','RMA pending action',pendingRMA],
+    ['amber','Shipping pending',pendingShip],
+  ].map(([c,l,v])=>`<div class="kc ${c}"><div class="kl">${l}</div><div class="kv">${v}</div></div>`).join('');
+
+  bc('ch1','doughnut',
+    ['Fixed & returned','Replaced','Advance','Battery','Failed','Pending'],
+    [rma.filter(r=>r.devStatus==='Device Returned to Customer').length,replaced,advance,battery,failed,Math.max(0,total-passed-failed-advance-battery)],
+    ['#3b6d11','#854f0b','#534ab7','#0f6e56','#a32d2d','#b4b2a9']
+  );
+  bc('ch2','doughnut',['Warranty','No warranty','Unknown'],
+    [rma.filter(r=>r.warranty==='Warranty').length,oow,rma.filter(r=>!r.warranty||r.warranty==='Unknown').length],
+    ['#3b6d11','#a32d2d','#b4b2a9']
+  );
+
+  // Pending actions list
+  const needsAction=[
+    ...rmaRecords.filter(r=>needsCL(r)&&!isClosed(r)).map(r=>({type:'rma',r})),
+    ...shipOrders.filter(s=>s.status==='PENDING').map(s=>({type:'ship',s})),
+  ];
+  const el=document.getElementById('pending-actions'),em=document.getElementById('pending-empty');
+  if(!needsAction.length){el.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  el.innerHTML=needsAction.map(item=>{
+    if(item.type==='rma'){
+      const r=item.r;const dy=daysOpen(r)||0;
+      return`<div class="card ${dy>=15?'over':dy>=8?'warn':'ok'}" style="padding:12px 15px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong>#${r.ticket}</strong>
+          <span style="color:var(--text2);font-size:12px">${r.customer||''}</span>
+          ${resultBadge(r)} ${wBadge(r.warranty)} ${zdBadge(r.ticket)}
+          <span style="margin-left:auto;font-size:11px;color:var(--text3)">${dy}d open · ${pct(r).d}/${pct(r).t} steps done</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">${r.device||''} · ${r.imei||''}</div>
+      </div>`;
+    }else{
+      const s=item.s;
+      return`<div class="card warn" style="padding:12px 15px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${badge('Shipping pending','b-amber')}
+          <strong>#${s.ticket}</strong>
+          <span style="color:var(--text2);font-size:12px">${s.name||''}</span>
+          <span style="font-size:11px;color:var(--text3)">${s.devices||''}</span>
+          ${zdBadge(s.ticket)}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">${s.date||''} · ${s.type||''} · ${s.ship||''}</div>
+      </div>`;
+    }
+  }).join('');
+}
+
+// ── RMA LIST ──────────────────────────────────────────────────────
+function renderRMA(){
+  const search=document.getElementById('fs-rma').value.toLowerCase();
+  const sf=document.getElementById('ff-rma-status').value;
+  const rf=document.getElementById('ff-rma-result').value;
+  const mf=document.getElementById('ff-rma-mo').value;
+  const inc=document.getElementById('ff-rma-inc').value;
+  let list=rmaRecords.filter(isRecent).filter(r=>{
+    if(mf&&mk(r.date)!==mf)return false;
+    if(rf&&r.testResult!==rf)return false;
+    if(sf==='open'&&isClosed(r))return false;
+    if(sf==='closed'&&!isClosed(r))return false;
+    if(sf==='overdue'&&(isClosed(r)||(daysOpen(r)||0)<15))return false;
+    if(inc==='1'&&pct(r).p===100)return false;
+    if(search){const h=[r.ticket,r.customer,r.imei,r.device,r.newImei,r.tracking].join(' ').toLowerCase();if(!h.includes(search))return false;}
+    return true;
+  }).sort((a,b)=>{const ac=isClosed(a)?1:0,bc=isClosed(b)?1:0;if(ac!==bc)return ac-bc;return(daysOpen(b)||0)-(daysOpen(a)||0);});
+  const el=document.getElementById('rma-list'),em=document.getElementById('rma-empty');
+  if(!list.length){el.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  el.innerHTML=list.map(r=>buildRMACard(r)).join('');
+}
+
+function buildRMACard(r){
+  const rk=riskOf(r);
+  const{d,t,p}=pct(r);
+  const dy=daysOpen(r);
+  const dStr=dy===null?'':dy===0?'today':dy+'d open';
+  const fill=p===100?'#3b6d11':p<50?'#e24b4a':'#ef9f27';
+  const showCL=needsCL(r);
+  const zd=zdTickets.find(z=>z.ticket===r.ticket);
+  const zdAlert=zd&&zd.status==='pending'&&!isClosed(r)?`<div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:8px 12px;font-size:12px;color:#1e40af;margin-bottom:12px">🔵 Zendesk ticket #${r.ticket} is still <strong>Pending (Blue)</strong> — update it once all steps are complete.</div>`:'';
+
+  let clHtml='';
+  if(showCL){
+    clHtml=zdAlert+'<div class="cl-steps">';
+    CL.forEach(x=>{
+      const state=(r.cl||{})[x.id]||'pending';
+      clHtml+=`<div class="ci">
+        <div class="ci-btns">
+          <button class="cibtn ${state==='done'?'done':''}" onclick="doStep('${r.id}','${x.id}','done')" title="Done">✓</button>
+          <button class="cibtn ${state==='na'?'na':''}" onclick="doStep('${r.id}','${x.id}','na')" title="N/A">N/A</button>
+        </div>
+        <div style="flex:1">
+          <div class="ci-label ${state}">${x.l}</div>
+          ${x.n?`<div class="ci-note">${x.n}</div>`:''}
+        </div>
+      </div>`;
+    });
+    clHtml+='</div>';
+  }else{
+    clHtml=`<div style="padding:10px 12px;background:var(--surface2);border-radius:var(--r);font-size:12px;color:var(--text2);margin-bottom:14px">
+      ${r.devStatus==='Device Returned to Customer'?'✅ Device passed — returned to customer. No further action needed.':r.devStatus==='Battery Replaced'?'✅ Battery replaced and returned.':'⏳ Awaiting test result.'}
+    </div>`;
+  }
+
+  return`<div class="card ${rk} ${zd&&zd.status==='pending'&&!isClosed(r)?'zd-pending':''}" id="card-${r.id}">
+  <div class="card-head" onclick="toggleCard('${r.id}')">
+    <div class="card-info">
+      <div class="card-title">#${r.ticket||'—'} <span style="font-weight:400;font-size:12px;color:var(--text2)">${r.customer||''}</span> ${wBadge(r.warranty)} ${resultBadge(r)} ${riskBadge(rk)} ${zdBadge(r.ticket)}</div>
+      <div class="card-sub">${[r.device,r.imei,dStr].filter(Boolean).join(' · ')}</div>
+    </div>
+    <div class="prog">
+      ${showCL?`<div class="pbar"><div class="pfill" style="width:${p}%;background:${fill}"></div></div><span class="pct">${d}/${t} steps</span>`:'<span class="pct" style="color:var(--text3)">no action</span>'}
+      <i class="ti ti-chevron-down chev" id="chev-${r.id}" aria-hidden="true"></i>
+    </div>
+  </div>
+  <div class="card-body" id="body-${r.id}">
+    ${clHtml}
+    <div class="fgrid">
+      <div class="fg"><label>Test result</label>
+        <select onchange="upd('rma','${r.id}','testResult',this.value)">
+          <option value="" ${!r.testResult?'selected':''}>Pending</option>
+          <option value="Pass" ${r.testResult==='Pass'?'selected':''}>Pass</option>
+          <option value="Fail" ${r.testResult==='Fail'?'selected':''}>Fail</option>
+        </select></div>
+      <div class="fg"><label>Action taken</label>
+        <select onchange="upd('rma','${r.id}','devStatus',this.value)">
+          <option value="" ${!r.devStatus?'selected':''}>Pending</option>
+          <option value="Replacement Device Sent" ${r.devStatus==='Replacement Device Sent'?'selected':''}>Replacement sent</option>
+          <option value="Device Returned to Customer" ${r.devStatus==='Device Returned to Customer'?'selected':''}>Fixed & returned</option>
+          <option value="Battery Replaced" ${r.devStatus==='Battery Replaced'?'selected':''}>Battery replaced</option>
+          <option value="Advance Replacement" ${r.devStatus==='Advance Replacement'?'selected':''}>Advance replacement</option>
+        </select></div>
+      <div class="fg"><label>Warranty</label>
+        <select onchange="upd('rma','${r.id}','warranty',this.value)">
+          <option value="Warranty" ${r.warranty==='Warranty'?'selected':''}>Warranty</option>
+          <option value="No Warranty" ${r.warranty==='No Warranty'?'selected':''}>No Warranty</option>
+          <option value="Unknown" ${r.warranty==='Unknown'?'selected':''}>Unknown</option>
+        </select></div>
+      <div class="fg"><label>New IMEI</label><input type="text" value="${r.newImei||''}" onchange="upd('rma','${r.id}','newImei',this.value)"></div>
+      <div class="fg"><label>Tracking #</label><input type="text" value="${r.tracking||''}" onchange="upd('rma','${r.id}','tracking',this.value)"></div>
+      <div class="fg"><label>Device</label><input type="text" value="${r.device||''}" onchange="upd('rma','${r.id}','device',this.value)"></div>
+      <div class="fg full"><label>Notes</label><textarea onchange="upd('rma','${r.id}','notes',this.value)">${r.notes||''}</textarea></div>
+    </div>
+    <div class="card-foot">
+      <button class="btn sm" onclick="openEdit('${r.id}')"><i class="ti ti-edit" aria-hidden="true"></i> Edit</button>
+      <button class="btn sm red" onclick="delRec('rma','${r.id}')"><i class="ti ti-trash" aria-hidden="true"></i> Delete</button>
+    </div>
+  </div>
+</div>`;
+}
+
+// ── SHIPPING LIST ─────────────────────────────────────────────────
+function renderShipping(){
+  const search=document.getElementById('fs-ship').value.toLowerCase();
+  const sf=document.getElementById('ff-ship-status').value;
+  const mf=document.getElementById('ff-ship-mo').value;
+  let list=shipOrders.filter(isRecent).filter(s=>{
+    if(mf&&mk(s.date)!==mf)return false;
+    if(sf&&s.status!==sf)return false;
+    if(search){const h=[s.ticket,s.name,s.devices,s.address].join(' ').toLowerCase();if(!h.includes(search))return false;}
+    return true;
+  }).sort((a,b)=>{if(a.status==='PENDING'&&b.status!=='PENDING')return-1;if(b.status==='PENDING'&&a.status!=='PENDING')return 1;return(b.date||'').localeCompare(a.date||'');});
+  const el=document.getElementById('ship-list'),em=document.getElementById('ship-empty');
+  if(!list.length){el.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  el.innerHTML=list.map(s=>`
+    <div class="ship-card ${s.status==='PENDING'?'pending-ship':'reviewed-ship'}">
+      <div class="ship-info">
+        <div class="ship-title">
+          #${s.ticket||'—'}
+          ${s.status==='PENDING'?badge('Pending — not shipped','b-amber'):badge('Shipped','b-green')}
+          ${badge(s.type||'order','b-blue')}
+          ${zdBadge(s.ticket)}
+        </div>
+        <div class="ship-sub">${[s.devices,s.name,s.date,s.ship].filter(Boolean).join(' · ')}</div>
+        ${s.address?`<div class="ship-sub" style="margin-top:3px">${s.address}</div>`:''}
+      </div>
+      <button class="btn sm red" onclick="delRec('ship','${s.id}')"><i class="ti ti-trash" aria-hidden="true"></i></button>
+    </div>
+  `).join('');
+}
+
+// ── MONTHLY ───────────────────────────────────────────────────────
+function renderMonthly(){
+  const mf=document.getElementById('m-sel').value;
+  const rma=mf?rmaRecords.filter(r=>mk(r.date)===mf):rmaRecords.filter(isRecent);
+  const ship=mf?shipOrders.filter(s=>mk(s.date)===mf):shipOrders.filter(isRecent);
+  const total=rma.length;
+  const passed=rma.filter(r=>r.testResult==='Pass').length;
+  const failed=rma.filter(r=>r.testResult==='Fail').length;
+  const replaced=rma.filter(r=>r.devStatus==='Replacement Device Sent').length;
+  const advance=rma.filter(r=>r.devStatus==='Advance Replacement').length;
+  const battery=rma.filter(r=>r.devStatus==='Battery Replaced').length;
+  const oow=rma.filter(r=>r.warranty==='No Warranty').length;
+  const oowRep=rma.filter(r=>r.warranty==='No Warranty'&&(r.devStatus==='Replacement Device Sent'||r.devStatus==='Advance Replacement')).length;
+
+  document.getElementById('m-kpis').innerHTML=[
+    ['blue','Total RMAs',total],
+    ['green','Passed',passed],
+    ['red','Failed',failed],
+    ['amber','Replaced',replaced],
+    ['purple','Advance replacement',advance],
+    ['teal','Battery replacement',battery],
+    ['red','Out of warranty',oow],
+    ['red','OOW replaced',oowRep],
+    ['gray','Shipping orders',ship.length],
+  ].map(([c,l,v])=>`<div class="kc ${c}"><div class="kl">${l}</div><div class="kv">${v}</div></div>`).join('');
+
+  const allM=[...new Set([...rmaRecords,...shipOrders].map(r=>mk(r.date)).filter(Boolean))].sort();
+  if(charts.ch3)charts.ch3.destroy();
+  const ctx=document.getElementById('ch3');
+  if(ctx&&allM.length){
+    charts.ch3=new Chart(ctx,{type:'bar',data:{
+      labels:allM.map(fmtMk),
+      datasets:[
+        {label:'Total RMAs',data:allM.map(m=>rmaRecords.filter(r=>mk(r.date)===m).length),backgroundColor:'#185fa5'},
+        {label:'Replaced',data:allM.map(m=>rmaRecords.filter(r=>mk(r.date)===m&&(r.devStatus==='Replacement Device Sent'||r.devStatus==='Advance Replacement')).length),backgroundColor:'#854f0b'},
+        {label:'Failed',data:allM.map(m=>rmaRecords.filter(r=>mk(r.date)===m&&r.testResult==='Fail').length),backgroundColor:'#a32d2d'},
+        {label:'Shipping orders',data:allM.map(m=>shipOrders.filter(s=>mk(s.date)===m).length),backgroundColor:'#534ab7'},
+      ]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},
+      scales:{x:{ticks:{font:{size:11},autoSkip:false,maxRotation:45}},y:{ticks:{font:{size:11},stepSize:1}}}}});
+  }
+
+  const allM2=[...new Set(rmaRecords.filter(isRecent).map(r=>mk(r.date)).filter(Boolean))].sort();
+  document.getElementById('m-tbody').innerHTML=[...allM2].reverse().map(m=>{
+    const r=rmaRecords.filter(x=>mk(x.date)===m);
+    const s=shipOrders.filter(x=>mk(x.date)===m);
+    const sentTesting=r.filter(x=>x.testResult==='Pass'||x.testResult==='Fail'||x.devStatus==='Replacement Device Sent'||x.devStatus==='Device Returned to Customer').length;
+    return`<tr>
+      <td><strong>${fmtMk(m)}</strong></td>
+      <td>${r.length}</td>
+      <td>${sentTesting}</td>
+      <td style="color:#3b6d11;font-weight:600">${r.filter(x=>x.devStatus==='Device Returned to Customer').length}</td>
+      <td style="color:#a32d2d;font-weight:600">${r.filter(x=>x.testResult==='Fail').length}</td>
+      <td style="color:#854f0b;font-weight:600">${r.filter(x=>x.devStatus==='Replacement Device Sent').length}</td>
+      <td style="color:#534ab7">${r.filter(x=>x.devStatus==='Advance Replacement').length}</td>
+      <td style="color:#0f6e56">${r.filter(x=>x.devStatus==='Battery Replaced').length}</td>
+      <td style="color:#854f0b">${r.filter(x=>x.warranty==='No Warranty').length}</td>
+      <td style="color:#a32d2d;font-weight:600">${r.filter(x=>x.warranty==='No Warranty'&&(x.devStatus==='Replacement Device Sent'||x.devStatus==='Advance Replacement')).length}</td>
+      <td>${s.length}</td>
+    </tr>`;
+  }).join('');
+}
+
+function bc(id,type,labels,data,colors){
+  if(charts[id])charts[id].destroy();
+  const ctx=document.getElementById(id);if(!ctx)return;
+  charts[id]=new Chart(ctx,{type,data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}}}});
+}
+
+// ── Card actions ──────────────────────────────────────────────────
+function toggleCard(id){
+  const b=document.getElementById('body-'+id),c=document.getElementById('chev-'+id);
+  const op=b.style.display!=='block';b.style.display=op?'block':'none';
+  if(c)c.style.transform=op?'rotate(180deg)':'';
+}
+
+async function doStep(rid,sid,state){
+  const r=rmaRecords.find(x=>x.id===rid);if(!r)return;
+  if(!r.cl)r.cl={};
+  r.cl[sid]=r.cl[sid]===state?'pending':state;
+  const old=document.getElementById('card-'+rid);
+  if(old){
+    const wasOpen=document.getElementById('body-'+rid)?.style.display==='block';
+    const tmp=document.createElement('div');tmp.innerHTML=buildRMACard(r);
+    const nc=tmp.firstChild;old.replaceWith(nc);
+    if(wasOpen){document.getElementById('body-'+rid).style.display='block';const ch=document.getElementById('chev-'+rid);if(ch)ch.style.transform='rotate(180deg)';}
+  }
+  updateNotifs();
+  try{await saveDoc('rma_records',r);}catch(e){toast('Save failed: '+e.message);}
+}
+
+async function upd(col,rid,f,v){
+  const arr=col==='rma'?rmaRecords:shipOrders;
+  const r=arr.find(x=>x.id===rid);if(!r)return;
+  r[f]=v;
+  const old=document.getElementById('card-'+rid);
+  if(old&&col==='rma'){
+    const wasOpen=document.getElementById('body-'+rid)?.style.display==='block';
+    const tmp=document.createElement('div');tmp.innerHTML=buildRMACard(r);
+    const nc=tmp.firstChild;old.replaceWith(nc);
+    if(wasOpen){document.getElementById('body-'+rid).style.display='block';const ch=document.getElementById('chev-'+rid);if(ch)ch.style.transform='rotate(180deg)';}
+  }
+  updateNotifs();
+  try{await saveDoc(col==='rma'?'rma_records':'ship_orders',r);}catch(e){toast('Save failed');}
+}
+
+async function delRec(col,id){
+  if(!confirm('Delete this record?'))return;
+  if(col==='rma')rmaRecords=rmaRecords.filter(r=>r.id!==id);
+  else shipOrders=shipOrders.filter(s=>s.id!==id);
+  try{await delDoc(col==='rma'?'rma_records':'ship_orders',id);boot();toast('Deleted');}
+  catch(e){toast('Delete failed');}
+}
+
+// ── Add/Edit RMA modal ────────────────────────────────────────────
+function openAdd(){
+  document.getElementById('add-title').textContent='New RMA';
+  document.getElementById('m-id').value='';
+  ['m-ticket','m-customer','m-device','m-imei','m-newimei','m-tracking','m-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('m-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('m-warranty').value='Unknown';
+  document.getElementById('m-test').value='';
+  document.getElementById('m-action').value='';
+  document.getElementById('add-ov').classList.add('on');
+}
+function openEdit(id){
+  const r=rmaRecords.find(x=>x.id===id);if(!r)return;
+  document.getElementById('add-title').textContent='Edit #'+r.ticket;
+  document.getElementById('m-id').value=r.id;
+  document.getElementById('m-ticket').value=r.ticket||'';
+  document.getElementById('m-date').value=r.date||'';
+  document.getElementById('m-customer').value=r.customer||'';
+  document.getElementById('m-device').value=r.device||'';
+  document.getElementById('m-imei').value=r.imei||'';
+  document.getElementById('m-warranty').value=r.warranty||'Unknown';
+  document.getElementById('m-test').value=r.testResult||'';
+  document.getElementById('m-action').value=r.devStatus||'';
+  document.getElementById('m-newimei').value=r.newImei||'';
+  document.getElementById('m-tracking').value=r.tracking||'';
+  document.getElementById('m-notes').value=r.notes||'';
+  document.getElementById('add-ov').classList.add('on');
+}
+function closeAdd(){document.getElementById('add-ov').classList.remove('on');}
+async function saveModal(){
+  const id=document.getElementById('m-id').value;
+  const ticket=document.getElementById('m-ticket').value.trim();
+  if(!ticket){toast('Ticket number required');return;}
+  const data={ticket,date:document.getElementById('m-date').value,customer:document.getElementById('m-customer').value,device:document.getElementById('m-device').value,imei:document.getElementById('m-imei').value,warranty:document.getElementById('m-warranty').value,testResult:document.getElementById('m-test').value,devStatus:document.getElementById('m-action').value,newImei:document.getElementById('m-newimei').value,tracking:document.getElementById('m-tracking').value,notes:document.getElementById('m-notes').value};
+  const rid=id||uid();
+  const rec={id:rid,cl:{},...(id?rmaRecords.find(r=>r.id===id)||{}:{}),...data};
+  if(!id)rmaRecords.push(rec);else{const i=rmaRecords.findIndex(r=>r.id===id);if(i>=0)rmaRecords[i]=rec;}
+  try{await saveDoc('rma_records',rec);closeAdd();boot();toast('Saved ✓');}
+  catch(e){toast('Save failed: '+e.message);}
+}
+
+// ── Paste import ──────────────────────────────────────────────────
+function openPaste(mode){
+  pasteMode=mode;
+  document.getElementById('paste-ta').value='';
+  document.getElementById('paste-preview').textContent='';
+  const hints={
+    rma:'On Job Scheduler RMA Tool → click Device Status or Completed tab → click 🔄 Sync RMA bookmark → Ctrl+V here',
+    shipping:'On Job Scheduler Shipping Tool → click 🔄 Sync Shipping bookmark → Ctrl+V here',
+    zendesk:'On Zendesk → click 🔄 Sync Zendesk bookmark → Ctrl+V here',
+  };
+  const titles={rma:'Paste RMA data',shipping:'Paste shipping orders',zendesk:'Paste Zendesk tickets'};
+  document.getElementById('paste-title').textContent=titles[mode];
+  document.getElementById('paste-hint').textContent=hints[mode];
+  document.getElementById('paste-ov').classList.add('on');
+  setTimeout(()=>document.getElementById('paste-ta').focus(),100);
+}
+function closePaste(){document.getElementById('paste-ov').classList.remove('on');}
+
+document.getElementById('paste-ta').addEventListener('input',()=>{
+  const v=document.getElementById('paste-ta').value.trim();
+  const pp=document.getElementById('paste-preview');
+  if(!v){pp.textContent='';return;}
+  try{
+    const d=JSON.parse(v);
+    if(d.rows||d.tickets){
+      pp.textContent='✓ '+(d.stage||d.source||'Data')+' — '+(d.rows||d.tickets||[]).length+' records ready';
+      pp.style.color='#3b6d11';
+    }else{pp.textContent='Unrecognised format';pp.style.color='#854f0b';}
+  }catch(e){pp.textContent='Paste the full text from the bookmarklet';pp.style.color='#854f0b';}
+});
+
+function gf(row,...keys){
+  for(const k of keys){
+    if(row[k]!==undefined&&String(row[k]).trim())return String(row[k]).trim();
+    const lk=k.toLowerCase();
+    for(const rk of Object.keys(row)){if(rk.toLowerCase()===lk&&String(row[rk]).trim())return String(row[rk]).trim();}
+  }
+  return'';
+}
+
+async function runImport(){
+  const text=document.getElementById('paste-ta').value.trim();
+  if(!text){toast('Paste data first');return;}
+  try{
+    const payload=JSON.parse(text);
+    if(pasteMode==='rma') await importRMA(payload);
+    else if(pasteMode==='shipping') await importShipping(payload);
+    else if(pasteMode==='zendesk') await importZendesk(payload);
+  }catch(e){console.error(e);toast('Import error: '+e.message);}
+}
+
+async function importRMA(payload){
+  const stage=payload.stage||'Unknown';
+  const rows=payload.rows||[];
+  if(!rows.length){toast('No rows found');return;}
+  let added=0,updated=0;
+  const toSave=[];
+  rows.forEach(row=>{
+    let warranty='Unknown';
+    const sd=gf(row,'start_date_from_db','start_date__from_db_','start_date_from_db_','start_date');
+    if(sd){const s=new Date(sd);if(!isNaN(s))warranty=(Date.now()-s)/864e5/365<=1?'Warranty':'No Warranty';}
+    const uw=gf(row,'under_warranty','underwarranty');
+    if(uw==='Yes')warranty='Warranty';if(uw==='No')warranty='No Warranty';
+    const actionRaw=gf(row,'action_taken_by_tech_agents','action_taken_by_tech_agents_','action_taken');
+    const al=actionRaw.toLowerCase();
+    let devStatus='';
+    if(al.includes('replacement device sent')||al.includes('replacement sent'))devStatus='Replacement Device Sent';
+    else if(al.includes('advance'))devStatus='Advance Replacement';
+    else if(al.includes('returned to customer')||al.includes('device returned'))devStatus='Device Returned to Customer';
+    else if(al.includes('battery'))devStatus='Battery Replaced';
+    else if(actionRaw)devStatus=actionRaw.slice(0,50);
+    const dsRaw=gf(row,'device_status','devicestatus');
+    const dsl=dsRaw.toLowerCase();
+    let testResult='';
+    if(dsl.includes('pass'))testResult='Pass';
+    else if(dsl.includes('fail'))testResult='Fail';
+    const mapped={
+      ticket:gf(row,'ticket_number','ticket_no','ticket').slice(0,20),
+      date:gf(row,'ticket_date','ticketdate','date').slice(0,10),
+      customer:gf(row,'customer_name','customername','customer').slice(0,50),
+      device:gf(row,'device_type','devicetype','device').slice(0,20),
+      imei:gf(row,'imei','IMEI').slice(0,20),
+      startDate:sd.slice(0,10),warranty,testResult,devStatus,
+      newImei:gf(row,'add_imei','addimei','new_imei').slice(0,20),
+      tracking:gf(row,'tracking_no_','tracking_no','tracking_num','return_tracking_number','tracking').slice(0,30),
+      notes:gf(row,'comment_s_','comments','additional_comments','comment_rma').slice(0,150),
+    };
+    if(!mapped.ticket)return;
+    const ex=rmaRecords.find(r=>r.ticket===mapped.ticket&&r.imei===mapped.imei);
+    if(ex){const sc=ex.cl||{};Object.assign(ex,mapped);ex.cl=sc;toSave.push(ex);updated++;}
+    else{const nr={id:uid(),cl:{},...mapped};rmaRecords.push(nr);toSave.push(nr);added++;}
+  });
+  if(!toSave.length){toast('No valid records');return;}
+  toast(`Saving ${toSave.length} records…`);
+  await saveAll('rma_records',toSave);
+  closePaste();boot();
+  toast(`✓ ${stage}: ${added} new · ${updated} updated`);
+}
+
+async function importShipping(payload){
+  const rows=payload.rows||[];
+  if(!rows.length){toast('No rows found');return;}
+  let added=0,updated=0;
+  const toSave=[];
+  rows.forEach(row=>{
+    const ticket=gf(row,'ticket','ticket_number').replace(/[#\/].*/,'').trim().slice(0,20);
+    if(!ticket)return;
+    const mapped={
+      ticket,
+      date:gf(row,'date').slice(0,10),
+      status:(gf(row,'status')||'PENDING').toUpperCase(),
+      owner:gf(row,'owner_createdby','owner','createdby').slice(0,40),
+      devices:gf(row,'devices').slice(0,100),
+      name:gf(row,'name').slice(0,50),
+      address:gf(row,'address').slice(0,150),
+      type:gf(row,'type').slice(0,20),
+      ship:gf(row,'ship').slice(0,30),
+    };
+    const ex=shipOrders.find(s=>s.ticket===ticket&&s.date===mapped.date);
+    if(ex){Object.assign(ex,mapped);toSave.push(ex);updated++;}
+    else{const nr={id:uid(),...mapped};shipOrders.push(nr);toSave.push(nr);added++;}
+  });
+  if(!toSave.length){toast('No valid orders');return;}
+  await saveAll('ship_orders',toSave);
+  closePaste();boot();
+  toast(`✓ Shipping: ${added} new · ${updated} updated`);
+}
+
+async function importZendesk(payload){
+  const tickets=payload.tickets||[];
+  if(!tickets.length){toast('No tickets found');return;}
+  let added=0,updated=0;
+  const toSave=[];
+  tickets.forEach(t=>{
+    if(!t.ticket)return;
+    const ex=zdTickets.find(z=>z.ticket===t.ticket);
+    if(ex){Object.assign(ex,t);toSave.push(ex);updated++;}
+    else{const nr={id:uid(),...t};zdTickets.push(nr);toSave.push(nr);added++;}
+  });
+  await saveAll('zd_tickets',toSave);
+  closePaste();boot();
+  toast(`✓ Zendesk: ${added} new · ${updated} updated`);
+}
+
+
+// ── Zendesk API sync ──────────────────────────────────────────────
+const ZD_DOMAIN = 'tracksupport.zendesk.com';
+const ZD_EMAIL  = 'akshaya.ashok@sievanetworks2.com';
+const ZD_TOKEN  = '38yu0KeUkOGE0u3WKezwX99nW4JgpRBiRo6j1ggf';
+const ZD_AUTH   = 'Basic ' + btoa(ZD_EMAIL + '/token:' + ZD_TOKEN);
+
+async function syncZendesk(){
+  try{
+    setSyncing(true,'syncing Zendesk…');
+    let allTickets=[];
+    let url=`https://${ZD_DOMAIN}/api/v2/tickets.json?status=pending&per_page=100`;
+    while(url){
+      const r=await fetch(url,{headers:{'Authorization':ZD_AUTH,'Content-Type':'application/json'}});
+      if(!r.ok){console.warn('ZD API error:',r.status);break;}
+      const data=await r.json();
+      const tickets=(data.tickets||[]).map(t=>({
+        id:'zd'+t.id,
+        ticket:String(t.id),
+        status:'pending',
+        subject:(t.subject||'').slice(0,100),
+        requester:String(t.requester_id||''),
+        assignee:String(t.assignee_id||''),
+        updated:t.updated_at||'',
+        created:t.created_at||'',
+      }));
+      allTickets=[...allTickets,...tickets];
+      url=data.next_page||null;
+    }
+    if(allTickets.length>0){
+      await saveAll('zd_tickets',allTickets);
+      zdTickets=allTickets;
+      renderRMA();updateNotifs();
+      setSyncing(false,'ZD synced: '+allTickets.length+' pending · '+now());
+    }else{
+      // No pending tickets — clear old ones
+      zdTickets=[];
+      setSyncing(false,'ZD: 0 pending · '+now());
+    }
+  }catch(e){
+    console.warn('Zendesk sync failed:',e.message);
+    setSyncing(false,'connected · '+now());
+  }
+}
+
+function go(pg,btn){
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.ttab').forEach(b=>b.classList.remove('on'));
+  document.getElementById('pg-'+pg).classList.add('on');btn.classList.add('on');
+  if(pg==='monthly')renderMonthly();
+  if(pg==='shipping')renderShipping();
+}
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),3500);}
+
+document.getElementById('add-ov').addEventListener('click',e=>{if(e.target===document.getElementById('add-ov'))closeAdd();});
+document.getElementById('paste-ov').addEventListener('click',e=>{if(e.target===document.getElementById('paste-ov'))closePaste();});
+
+window.go=go;window.openAdd=openAdd;window.openEdit=openEdit;window.closeAdd=closeAdd;
+window.saveModal=saveModal;window.delRec=delRec;window.toggleCard=toggleCard;
+window.doStep=doStep;window.upd=upd;window.openPaste=openPaste;window.closePaste=closePaste;
+window.runImport=runImport;window.fullSync=fullSync;window.renderDash=renderDash;
+window.renderMonthly=renderMonthly;window.renderRMA=renderRMA;window.renderShipping=renderShipping;
+
+try{
+  [rmaRecords,shipOrders,zdTickets]=await Promise.all([fetchCol('rma_records'),fetchCol('ship_orders'),fetchCol('zd_tickets')]);
+  
+  // One-time silent cleanup: remove pre-2026 records
+  const cleaned = localStorage.getItem('rma_cleaned_2026');
+  if(!cleaned){
+    const oldRMA  = rmaRecords.filter(r=>{ const m=mk(r.date||''); return m && m<'2026-01'; });
+    const oldShip = shipOrders.filter(s=>{ const m=mk(s.date||''); return m && m<'2026-01'; });
+    if(oldRMA.length||oldShip.length){
+      await Promise.all([
+        ...oldRMA.map(r=>deleteDoc(doc(db,'rma_records',r.id))),
+        ...oldShip.map(s=>deleteDoc(doc(db,'ship_orders',s.id))),
+      ]);
+      rmaRecords  = rmaRecords.filter(r=>{ const m=mk(r.date||''); return !m||m>='2026-01'; });
+      shipOrders  = shipOrders.filter(s=>{ const m=mk(s.date||''); return !m||m>='2026-01'; });
+      console.log(`Cleaned ${oldRMA.length+oldShip.length} pre-2026 records`);
+    }
+    localStorage.setItem('rma_cleaned_2026','1');
+  }
+
+  boot();setSyncing(false,'connected · '+now());
+  startListen();
+}catch(e){setErr('connection failed');console.error(e);}
+</script>
+</body>
+</html>
