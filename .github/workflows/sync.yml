@@ -1,0 +1,30 @@
+name: Sync RMA & Shipping Data
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Every hour
+  workflow_dispatch:       # Manual trigger button
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: cd scripts && npm install
+
+      - name: Run sync
+        env:
+          PORTAL_USER: ${{ secrets.PORTAL_USER }}
+          PORTAL_PASS: ${{ secrets.PORTAL_PASS }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+        run: node scripts/sync.js
