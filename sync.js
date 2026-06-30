@@ -88,7 +88,7 @@ async function login(){
   const res = await fetchWithCookies(LOGIN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `username=${encodeURIComponent(PORTAL_USER)}&password=${encodeURIComponent(PORTAL_PASS)}&login=Login`,
+    body: `user=${encodeURIComponent(PORTAL_USER)}&pass=${encodeURIComponent(PORTAL_PASS)}&url=&submit=Log+In`,
     redirect: 'follow',
   });
   const body = await res.text();
