@@ -255,8 +255,13 @@ async function main(){
       };
     });
 
-  const rmaDocs = Object.values(rmaMap);
-  console.log(`Total unique RMA records: ${rmaDocs.length}`);
+  // Filter to Jan 2026 onwards only
+  const allDocs = Object.values(rmaMap);
+  const rmaDocs = allDocs.filter(r => {
+    if(!r.date) return false;
+    return r.date >= '2026-01';
+  });
+  console.log(`Total unique RMA records (Jan 2026+): ${rmaDocs.length} of ${allDocs.length}`);
   await saveBatch('rma_records', rmaDocs);
 
   // Fetch & save shipping orders
