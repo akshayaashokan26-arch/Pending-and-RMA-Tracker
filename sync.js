@@ -7,7 +7,7 @@ const admin = require('firebase-admin');
 const PORTAL_USER = process.env.PORTAL_USER;
 const PORTAL_PASS = process.env.PORTAL_PASS;
 const BASE_URL    = 'https://sievaportal.com/job-scheduler';
-const LOGIN_URL   = `${BASE_URL}/login/login.php`;
+const LOGIN_URL   = `${BASE_URL}/login/login_task.php`;
 const RMA_URL     = `${BASE_URL}/pagelayout/rma/Data/showRMAData_withGreen.php`;
 const SHIP_URL    = `${BASE_URL}/pagelayout/rma/Data/showOrderData.php`;
 
