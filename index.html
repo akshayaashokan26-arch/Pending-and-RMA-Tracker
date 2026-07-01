@@ -165,8 +165,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <div class="top">
   <div class="logo"><i class="ti ti-package-export" aria-hidden="true"></i> RMA Tracker</div>
-  <button class="ttab on" onclick="go('dash',this)">Dashboard</button>
-  <button class="ttab" onclick="go('rma',this)">RMA checklist</button>
+  <button class="ttab on" onclick="go('rma',this)">RMA checklist</button>
   <button class="ttab" onclick="go('shipping',this)">Shipping orders</button>
   <button class="ttab" onclick="go('zd',this)">Pending tickets</button>
   <button class="ttab" onclick="go('monthly',this)">Monthly report</button>
@@ -177,29 +176,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
-<!-- DASHBOARD -->
-<div class="pg on" id="pg-dash">
-  <div class="tb">
-    <h2>Overview</h2>
-<select id="dash-mo" onchange="renderDash()" style="font-size:12px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit"><option value="">All time</option></select>
-  </div>
-  <div class="krow" id="dash-kpis"></div>
-  <div class="cgrid">
-    <div class="cw"><h3>RMA outcomes</h3><div style="position:relative;height:190px"><canvas id="ch1" role="img" aria-label="RMA outcomes">Outcomes.</canvas></div></div>
-    <div class="cw"><h3>Warranty split</h3><div style="position:relative;height:190px"><canvas id="ch2" role="img" aria-label="Warranty">Warranty.</canvas></div></div>
-  </div>
-
-  <!-- Pending actions -->
-  <div class="section-title">⚠ Needs attention</div>
-  <div id="pending-actions" class="cards"></div>
-  <div class="empty" id="pending-empty" style="display:none">
-    <i class="ti ti-circle-check" aria-hidden="true"></i>
-    <p>All clear — nothing pending action right now.</p>
-  </div>
-</div>
-
 <!-- RMA CHECKLIST -->
-<div class="pg" id="pg-rma">
+<div class="pg on" id="pg-rma">
   <div class="tb">
     <h2>RMA checklist</h2>
     <button class="btn blue" onclick="openAdd()"><i class="ti ti-plus" aria-hidden="true"></i> New RMA</button>
@@ -209,7 +187,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
   <div class="filters">
     <input type="text" id="fs-rma" placeholder="Search ticket, IMEI, customer…" oninput="renderRMA()">
-    <select id="ff-rma-status" onchange="renderRMA()"><option value="">All</option><option value="open">Open</option><option value="overdue">Overdue</option><option value="closed">Closed</option></select>
+    <select id="ff-rma-status" onchange="renderRMA()"><option value="">All</option><option value="open">Open</option><option value="overdue">Overdue (15+ days open)</option><option value="closed">Closed</option></select>
     <select id="ff-rma-result" onchange="renderRMA()"><option value="">All results</option><option value="Pass">Passed</option><option value="Fail">Failed</option></select>
     <select id="ff-rma-mo" onchange="renderRMA()"><option value="">All months</option></select>
     <select id="ff-rma-inc" onchange="renderRMA()"><option value="">All</option><option value="1">Incomplete only</option></select>
@@ -238,7 +216,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="pg" id="pg-zd">
   <div class="tb">
     <h2>Pending tickets</h2>
-    <span style="font-size:12px;color:var(--text3)">Live from Zendesk — refreshes every 5 min while this tab is open</span>
+    <span style="font-size:12px;color:var(--text3)">Live from Zendesk (GPSandTrack Support brand) — refreshes every 5 min while this tab is open</span>
     <button class="btn" onclick="syncZendesk()"><i class="ti ti-refresh" aria-hidden="true"></i> Refresh now</button>
   </div>
   <div class="filters">
@@ -246,7 +224,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <select id="ff-zd-fu" onchange="renderZdPending()">
       <option value="">All</option>
       <option value="never">Never followed up</option>
-      <option value="overdue">Overdue (2+ days)</option>
+      <option value="overdue">No follow-up in 2+ days</option>
       <option value="today">Followed up today</option>
     </select>
   </div>
@@ -411,7 +389,7 @@ function daysOpen(r){
   if(isClosed(r)&&r.shipDate){const e=new Date(r.shipDate);if(!isNaN(e))return Math.round((e-d)/864e5);}
   return Math.round((Date.now()-d)/864e5);
 }
-function riskOf(r){if(isClosed(r))return'done';const d=daysOpen(r);if(d===null)return'ok';if(d>=15)return'over';if(d>=8)return'warn';return'ok';}
+function riskOf(r){if(!needsFollowUp(r))return'done';const d=daysOpen(r);if(d===null)return'ok';if(d>=15)return'over';if(d>=8)return'warn';return'ok';}
 
 function badge(t,c){return`<span class="badge ${c}">${t}</span>`;}
 function wBadge(w){return w==='Warranty'?badge('Warranty','b-green'):w==='No Warranty'?badge('No Warranty','b-red'):badge('Unknown','b-gray');}
@@ -424,7 +402,7 @@ function resultBadge(r){
   if(r.testResult==='Fail')return badge('Failed','b-red');
   return badge('Pending','b-gray');
 }
-function riskBadge(r){return r==='over'?badge('⚠ Overdue','b-red'):r==='warn'?badge('At risk','b-amber'):r==='done'?badge('Closed','b-green'):'';}
+function riskBadge(r){return r==='over'?badge('⚠ Overdue (15d+)','b-red'):r==='warn'?badge('At risk','b-amber'):r==='done'?badge('Closed','b-green'):'';}
 function zdBadge(ticket){
   const zd=zdTickets.find(z=>z.ticket===ticket);
   if(!zd)return'';
@@ -454,88 +432,14 @@ function updateNotifs(){
 function boot(){
   // Populate month selects
   const allMonths=[...new Set([...rmaRecords.filter(isRecent),...shipOrders.filter(isRecent)].map(r=>mk(r.date)).filter(Boolean))].sort().reverse();
-  ['ff-rma-mo','ff-ship-mo','dash-mo','m-sel'].forEach(id=>{
+  ['ff-rma-mo','ff-ship-mo','m-sel'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
     const cur=el.value;
     el.innerHTML=id==='m-sel'?'<option value="">All months</option>':'<option value="">All months</option>';
     allMonths.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=fmtMk(m);el.appendChild(o);});
     if(cur)el.value=cur;
   });
-  renderDash();renderRMA();renderShipping();updateNotifs();
-}
-
-// ── DASHBOARD ─────────────────────────────────────────────────────
-function renderDash(){
-  const mf=document.getElementById('dash-mo').value;
-  const rma=mf?rmaRecords.filter(r=>mk(r.date)===mf):rmaRecords.filter(isRecent);
-  const ship=mf?shipOrders.filter(s=>mk(s.date)===mf):shipOrders.filter(isRecent);
-  const total=rma.length;
-  const passed=rma.filter(r=>r.testResult==='Pass').length;
-  const failed=rma.filter(r=>r.testResult==='Fail').length;
-  const replaced=rma.filter(r=>r.devStatus==='Replacement Device Sent').length;
-  const advance=rma.filter(r=>r.devStatus==='Advance Replacement').length;
-  const battery=rma.filter(r=>r.devStatus==='Battery Replaced').length;
-  const oow=rma.filter(r=>r.warranty==='No Warranty').length;
-  const oowRep=rma.filter(r=>r.warranty==='No Warranty'&&(r.devStatus==='Replacement Device Sent'||r.devStatus==='Advance Replacement')).length;
-  const pendingRMA=rma.filter(needsFollowUp).length;
-  const pendingShip=ship.filter(s=>s.status==='PENDING').length;
-
-  document.getElementById('dash-kpis').innerHTML=[
-    ['blue','Total RMAs',total],
-    ['green','Passed testing',passed],
-    ['red','Failed testing',failed],
-    ['amber','Replaced',replaced+advance],
-    ['teal','Battery replaced',battery],
-    ['red','Out of warranty',oow],
-    ['red','OOW replaced',oowRep],
-    ['amber','RMA pending action',pendingRMA],
-    ['amber','Shipping pending',pendingShip],
-  ].map(([c,l,v])=>`<div class="kc ${c}"><div class="kl">${l}</div><div class="kv">${v}</div></div>`).join('');
-
-  bc('ch1','doughnut',
-    ['Fixed & returned','Replaced','Advance','Battery','Failed','Pending'],
-    [rma.filter(r=>r.devStatus==='Device Returned to Customer').length,replaced,advance,battery,failed,Math.max(0,total-passed-failed-advance-battery)],
-    ['#3b6d11','#854f0b','#534ab7','#0f6e56','#a32d2d','#b4b2a9']
-  );
-  bc('ch2','doughnut',['Warranty','No warranty','Unknown'],
-    [rma.filter(r=>r.warranty==='Warranty').length,oow,rma.filter(r=>!r.warranty||r.warranty==='Unknown').length],
-    ['#3b6d11','#a32d2d','#b4b2a9']
-  );
-
-  // Pending actions list
-  const needsAction=[
-    ...rmaRecords.filter(isRecent).filter(needsFollowUp).map(r=>({type:'rma',r})),
-    ...shipOrders.filter(isRecent).filter(s=>s.status==='PENDING').map(s=>({type:'ship',s})),
-  ];
-  const el=document.getElementById('pending-actions'),em=document.getElementById('pending-empty');
-  if(!needsAction.length){el.innerHTML='';em.style.display='block';return;}
-  em.style.display='none';
-  el.innerHTML=needsAction.map(item=>{
-    if(item.type==='rma'){
-      const r=item.r;const dy=daysOpen(r)||0;
-      return`<div class="card ${dy>=15?'over':dy>=8?'warn':'ok'}" style="padding:12px 15px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <strong>#${r.ticket}</strong>
-          <span style="color:var(--text2);font-size:12px">${r.customer||''}</span>
-          ${resultBadge(r)} ${wBadge(r.warranty)} ${zdBadge(r.ticket)}
-          <span style="margin-left:auto;font-size:11px;color:var(--text3)">${dy}d open · ${pct(r).d}/${pct(r).t} steps done</span>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">${r.device||''} · ${r.imei||''}</div>
-      </div>`;
-    }else{
-      const s=item.s;
-      return`<div class="card warn" style="padding:12px 15px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          ${badge('Shipping pending','b-amber')}
-          <strong>#${s.ticket}</strong>
-          <span style="color:var(--text2);font-size:12px">${s.name||''}</span>
-          <span style="font-size:11px;color:var(--text3)">${s.devices||''}</span>
-          ${zdBadge(s.ticket)}
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">${s.date||''} · ${s.type||''} · ${s.ship||''}</div>
-      </div>`;
-    }
-  }).join('');
+  renderRMA();renderShipping();updateNotifs();
 }
 
 // ── RMA LIST ──────────────────────────────────────────────────────
@@ -1030,19 +934,40 @@ async function importZendesk(payload){
 // ── Zendesk API sync ──────────────────────────────────────────────
 const ZD_DOMAIN = 'tracksupport.zendesk.com';
 const ZD_EMAIL  = 'akshaya.ashok@sievanetworks2.com';
-const ZD_TOKEN  = '38yu0KeUkOGE0u3WKezwX99nW4JgpRBiRo6j1ggf';
+const ZD_TOKEN  = 'PnzJE5bxl8SvlFgg0DNZNVB5y42mq75NoQiBkEJs';
 const ZD_AUTH   = 'Basic ' + btoa(ZD_EMAIL + '/token:' + ZD_TOKEN);
+const ZD_BRAND_NAME = 'GPSandTrack Support'; // only show pending tickets from this brand
+
+let zdBrandId = null; // cached after first lookup so we don't re-fetch every 5 min
+async function getZdBrandId(){
+  if(zdBrandId!==null) return zdBrandId;
+  try{
+    const r=await fetch(`https://${ZD_DOMAIN}/api/v2/brands.json`,{headers:{'Authorization':ZD_AUTH,'Content-Type':'application/json'}});
+    if(!r.ok){console.warn('ZD brands lookup failed:',r.status);return null;}
+    const data=await r.json();
+    const match=(data.brands||[]).find(b=>(b.name||'').trim().toLowerCase()===ZD_BRAND_NAME.trim().toLowerCase());
+    if(!match){console.warn(`ZD brand "${ZD_BRAND_NAME}" not found — showing all pending tickets instead`);return null;}
+    zdBrandId=match.id;
+    return zdBrandId;
+  }catch(e){console.warn('ZD brands lookup error:',e.message);return null;}
+}
 
 async function syncZendesk(){
   try{
     setSyncing(true,'syncing Zendesk…');
     let allTickets=[];
-    let url=`https://${ZD_DOMAIN}/api/v2/tickets.json?status=pending&per_page=100`;
+    const brandId=await getZdBrandId();
+    // Search API when we have a brand to scope to (returns full ticket objects
+    // under "results"); plain ticket list as a fallback if brand lookup failed.
+    let url=brandId
+      ? `https://${ZD_DOMAIN}/api/v2/search.json?query=${encodeURIComponent(`type:ticket status:pending brand:${brandId}`)}&per_page=100`
+      : `https://${ZD_DOMAIN}/api/v2/tickets.json?status=pending&per_page=100`;
     while(url){
       const r=await fetch(url,{headers:{'Authorization':ZD_AUTH,'Content-Type':'application/json'}});
       if(!r.ok){console.warn('ZD API error:',r.status);break;}
       const data=await r.json();
-      const tickets=(data.tickets||[]).map(t=>({
+      const rows=data.results||data.tickets||[];
+      const tickets=rows.map(t=>({
         id:'zd'+t.id,
         ticket:String(t.id),
         status:'pending',
@@ -1151,7 +1076,7 @@ document.getElementById('paste-ov').addEventListener('click',e=>{if(e.target===d
 window.go=go;window.openAdd=openAdd;window.openEdit=openEdit;window.closeAdd=closeAdd;
 window.saveModal=saveModal;window.delRec=delRec;window.toggleCard=toggleCard;
 window.doStep=doStep;window.upd=upd;window.openPaste=openPaste;window.closePaste=closePaste;
-window.runImport=runImport;window.fullSync=fullSync;window.renderDash=renderDash;
+window.runImport=runImport;window.fullSync=fullSync;
 window.renderMonthly=renderMonthly;window.renderRMA=renderRMA;window.renderShipping=renderShipping;
 window.renderZdPending=renderZdPending;window.markFollowedUp=markFollowedUp;window.syncZendesk=syncZendesk;
 
