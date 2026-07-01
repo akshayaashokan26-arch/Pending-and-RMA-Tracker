@@ -135,7 +135,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .toast{position:fixed;bottom:20px;right:20px;background:#0d2137;color:#fff;padding:10px 16px;border-radius:var(--r);font-size:12px;z-index:300;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:340px}
 .toast.on{opacity:1}
 .section-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;display:flex;align-items:center;gap:8px}
-.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}.month-detail{margin-bottom:16px}
+.month-detail h3{margin-bottom:10px}
+.imei-block{margin-bottom:14px}
+.imei-block-head{font-weight:600;font-size:13px;margin-bottom:6px}
+.imei-count{color:var(--text3);font-weight:400}
+.imei-row{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;padding:5px 8px;border-bottom:1px solid var(--border)}
+.imei-row:last-child{border-bottom:none}
+.imei-code{font-family:monospace;font-weight:600;min-width:130px}
+@media print{
+  .top,.notif-bar,.tb .btn,#m-sel,.filters,.card-foot,.ci-btns{display:none!important}
+  .pg{display:block!important;padding:0}
+  body{background:#fff!important}
+  .imei-row{break-inside:avoid}
+  .month-detail{break-inside:avoid-page}
+}
 </style>
 </head>
 <body>
@@ -234,6 +248,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </tr></thead>
     <tbody id="m-tbody"></tbody>
   </table></div>
+  <div id="m-imei-detail"></div>
 </div>
 
 <!-- Add RMA modal -->
@@ -306,7 +321,7 @@ let pasteMode   = 'rma';
 
 // Only show data from June 2026 onwards
 const START_DATE = '2026-01';
-function isRecent(r){ const m=mk(r.date||r.syncedAt||''); return m>=START_DATE; }
+function isRecent(r){ const m=mk(r.date||''); return m>=START_DATE; }
 
 // ── Firebase helpers ──────────────────────────────────────────────
 async function fetchCol(col){ const s=await getDocs(collection(db,col)); return s.docs.map(d=>({id:d.id,...d.data()})); }
@@ -392,9 +407,9 @@ function zdBadge(ticket){
 // ── Notifications ─────────────────────────────────────────────────
 function updateNotifs(){
   // Find RMAs that need action: replacement sent but checklist incomplete
-  const needsAction=rmaRecords.filter(r=>needsCL(r)&&!isClosed(r));
+  const needsAction=rmaRecords.filter(isRecent).filter(r=>needsCL(r)&&!isClosed(r));
   // Find shipping orders that are still pending
-  const pendingShip=shipOrders.filter(s=>s.status==='PENDING');
+  const pendingShip=shipOrders.filter(isRecent).filter(s=>s.status==='PENDING');
   const total=needsAction.length+pendingShip.length;
   const bar=document.getElementById('notif-bar');
   if(total>0){
@@ -462,8 +477,8 @@ function renderDash(){
 
   // Pending actions list
   const needsAction=[
-    ...rmaRecords.filter(r=>needsCL(r)&&!isClosed(r)).map(r=>({type:'rma',r})),
-    ...shipOrders.filter(s=>s.status==='PENDING').map(s=>({type:'ship',s})),
+    ...rmaRecords.filter(isRecent).filter(r=>needsCL(r)&&!isClosed(r)).map(r=>({type:'rma',r})),
+    ...shipOrders.filter(isRecent).filter(s=>s.status==='PENDING').map(s=>({type:'ship',s})),
   ];
   const el=document.getElementById('pending-actions'),em=document.getElementById('pending-empty');
   if(!needsAction.length){el.innerHTML='';em.style.display='block';return;}
@@ -691,6 +706,60 @@ function renderMonthly(){
       <td>${s.length}</td>
     </tr>`;
   }).join('');
+
+  renderMonthlyIMEIDetail(allM2);
+}
+
+// ── Monthly report: IMEI list per category ──────────────────────────
+function imeiRow(r,extra){
+  return `<div class="imei-row">
+    <span class="imei-code">${r.imei||'—'}</span>
+    <span>#${r.ticket||'—'}</span>
+    <span>${r.customer||'—'}</span>
+    <span>${r.device||''}</span>
+    ${extra||''}
+  </div>`;
+}
+function imeiSection(title,color,rows,renderer){
+  if(!rows.length) return '';
+  return `<div class="imei-block">
+    <div class="imei-block-head" style="color:${color}">${title} <span class="imei-count">(${rows.length})</span></div>
+    ${rows.map(r=>renderer?renderer(r):imeiRow(r)).join('')}
+  </div>`;
+}
+function renderMonthDetail(m){
+  const r=rmaRecords.filter(x=>mk(x.date)===m);
+  const s=shipOrders.filter(x=>mk(x.date)===m);
+  const sentTesting=r.filter(x=>x.testResult==='Pass'||x.testResult==='Fail'||x.devStatus==='Replacement Device Sent'||x.devStatus==='Device Returned to Customer');
+  const fixed=r.filter(x=>x.devStatus==='Device Returned to Customer');
+  const failed=r.filter(x=>x.testResult==='Fail');
+  const replaced=r.filter(x=>x.devStatus==='Replacement Device Sent');
+  const advance=r.filter(x=>x.devStatus==='Advance Replacement');
+  const battery=r.filter(x=>x.devStatus==='Battery Replaced');
+  const oow=r.filter(x=>x.warranty==='No Warranty');
+  const oowRep=oow.filter(x=>x.devStatus==='Replacement Device Sent'||x.devStatus==='Advance Replacement');
+  const body=[
+    imeiSection('Sent for testing','#185fa5',sentTesting),
+    imeiSection('Fixed &amp; returned to customer','#3b6d11',fixed),
+    imeiSection('Failed testing','#a32d2d',failed),
+    imeiSection('Replacement sent','#854f0b',replaced,x=>imeiRow(x,`<span>New IMEI: ${x.newImei||'—'}</span><span>Tracking: ${x.tracking||'—'}</span>`)),
+    imeiSection('Advance replacement','#534ab7',advance,x=>imeiRow(x,`<span>New IMEI: ${x.newImei||'—'}</span><span>Tracking: ${x.tracking||'—'}</span>`)),
+    imeiSection('Battery replacement','#0f6e56',battery),
+    imeiSection('Out of warranty','#854f0b',oow),
+    imeiSection('OOW replaced','#a32d2d',oowRep,x=>imeiRow(x,`<span>New IMEI: ${x.newImei||'—'}</span>`)),
+    imeiSection('Shipping orders','#0f172a',s,x=>`<div class="imei-row"><span class="imei-code">${x.devices||'—'}</span><span>#${x.ticket||'—'}</span><span>${x.name||'—'}</span><span>${x.status||''}</span></div>`),
+  ].filter(Boolean).join('');
+  if(!body) return '';
+  return `<div class="cw month-detail">
+    <h3>${fmtMk(m)}</h3>
+    ${body}
+  </div>`;
+}
+function renderMonthlyIMEIDetail(months){
+  const el=document.getElementById('m-imei-detail');
+  if(!el) return;
+  const sections=[...months].reverse().map(renderMonthDetail).filter(Boolean).join('');
+  el.innerHTML=sections||'<div class="empty"><i class="ti ti-list-details" aria-hidden="true"></i><p>No IMEI records for the selected range yet.</p></div>';
 }
 
 function bc(id,type,labels,data,colors){
