@@ -82,6 +82,23 @@ async function saveBatch(col, docs){
   }
 }
 
+// Deletes Firestore docs whose IDs are not in keepIds. This is what actually
+// removes stale / pre-2026 / no-longer-in-source records — saveBatch alone
+// only ever adds or merges, it never removes anything.
+async function deleteStale(col, keepIds){
+  const snap = await db.collection(col).get();
+  const staleIds = snap.docs.map(d => d.id).filter(id => !keepIds.has(id));
+  if(!staleIds.length){ console.log(`  No stale docs to delete in ${col}`); return; }
+  const chunks = [];
+  for(let i = 0; i < staleIds.length; i += 400) chunks.push(staleIds.slice(i, i+400));
+  for(const chunk of chunks){
+    const batch = db.batch();
+    chunk.forEach(id => batch.delete(db.collection(col).doc(id)));
+    await batch.commit();
+  }
+  console.log(`  Deleted ${staleIds.length} stale docs from ${col}`);
+}
+
 // ── Login ─────────────────────────────────────────────────────────
 async function login(){
   console.log('Logging in to sievaportal.com...');
@@ -264,18 +281,33 @@ async function main(){
   console.log(`Total unique RMA records (Jan 2026+): ${rmaDocs.length} of ${allDocs.length}`);
   await saveBatch('rma_records', rmaDocs);
 
+  // Remove pre-2026 / stale RMA docs left over from before this filter existed
+  // (or ones that dropped out of the source entirely). Guarded: only run when
+  // this sync actually pulled real rows, so a transient fetch failure never
+  // wipes the collection.
+  if(deviceStatus.length + completed.length > 0){
+    await deleteStale('rma_records', new Set(rmaDocs.map(d => d.id)));
+  } else {
+    console.log('  Skipping rma_records cleanup — source fetch returned 0 rows (likely a transient failure)');
+  }
+
   // Fetch & save shipping orders
   const shipRows = await fetchShipping();
   if(shipRows.length > 0){
     const existingShipSnap = await db.collection('ship_orders').get();
     const existingShip = {};
     existingShipSnap.docs.forEach(d => { existingShip[d.data().ticket + '_' + d.data().date] = d.id; });
-    const shipDocs = shipRows.map(mapShipRow).filter(Boolean).map(s => ({
+    const shipDocsAll = shipRows.map(mapShipRow).filter(Boolean).map(s => ({
       id: existingShip[s.ticket+'_'+s.date] || uid(),
       ...s,
     }));
-    console.log(`Shipping orders: ${shipDocs.length}`);
+    // Same Jan 2026+ rule applies to shipping data
+    const shipDocs = shipDocsAll.filter(s => s.date && s.date >= '2026-01');
+    console.log(`Shipping orders (Jan 2026+): ${shipDocs.length} of ${shipDocsAll.length}`);
     await saveBatch('ship_orders', shipDocs);
+    await deleteStale('ship_orders', new Set(shipDocs.map(d => d.id)));
+  } else {
+    console.log('Could not fetch shipping orders this run — leaving ship_orders untouched (no cleanup)');
   }
 
   console.log('=== Sync Complete ===', new Date().toISOString());
