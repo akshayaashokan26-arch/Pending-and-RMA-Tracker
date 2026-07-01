@@ -38,7 +38,11 @@ async function getZdBrandId(){
     if(!res.ok){ console.warn('ZD brands lookup failed:', res.status); return null; }
     const data = await res.json();
     const match = (data.brands || []).find(b => (b.name || '').trim().toLowerCase() === ZD_BRAND_NAME.trim().toLowerCase());
-    if(!match){ console.warn(`ZD brand "${ZD_BRAND_NAME}" not found — fetching all pending tickets instead`); return null; }
+    if(!match){
+      console.warn(`ZD brand "${ZD_BRAND_NAME}" not found — fetching all pending tickets instead`);
+      console.warn('Available brands:', (data.brands || []).map(b => `"${b.name}" (id ${b.id})`).join(', ') || '(none returned)');
+      return null;
+    }
     return match.id;
   }catch(e){ console.warn('ZD brands lookup error:', e.message); return null; }
 }
