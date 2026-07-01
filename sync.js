@@ -179,6 +179,7 @@ async function fetchShipping(){
   return [];
 }
 
+
 // ── Map RMA row ───────────────────────────────────────────────────
 function mapRMARow(row, stage){
   const sd = gf(row, 'start_date_from_db', 'start_date__from_db_', 'startDate', 'start_date');
@@ -297,15 +298,30 @@ async function main(){
     const existingShipSnap = await db.collection('ship_orders').get();
     const existingShip = {};
     existingShipSnap.docs.forEach(d => { existingShip[d.data().ticket + '_' + d.data().date] = d.id; });
-    const shipDocsAll = shipRows.map(mapShipRow).filter(Boolean).map(s => ({
+    const shipDocs = shipRows.map(mapShipRow).filter(Boolean).map(s => ({
       id: existingShip[s.ticket+'_'+s.date] || uid(),
       ...s,
     }));
-    // Same Jan 2026+ rule applies to shipping data
-    const shipDocs = shipDocsAll.filter(s => s.date && s.date >= '2026-01');
-    console.log(`Shipping orders (Jan 2026+): ${shipDocs.length} of ${shipDocsAll.length}`);
+    console.log(`Shipping orders synced: ${shipDocs.length}`);
     await saveBatch('ship_orders', shipDocs);
-    await deleteStale('ship_orders', new Set(shipDocs.map(d => d.id)));
+
+    // Only delete a doc when it has a REAL, already-stored date that's
+    // confirmed pre-2026. Never delete because a date is missing/blank —
+    // that's a sign the field name didn't map, not that the record is stale.
+    // (This is deliberately more conservative than the rma_records cleanup.)
+    const staleIds = existingShipSnap.docs
+      .filter(d => { const dt = d.data().date; return dt && dt < '2026-01'; })
+      .map(d => d.id);
+    if(staleIds.length){
+      console.log(`Deleting ${staleIds.length} confirmed pre-2026 ship_orders`);
+      const chunks = [];
+      for(let i = 0; i < staleIds.length; i += 400) chunks.push(staleIds.slice(i, i+400));
+      for(const chunk of chunks){
+        const batch = db.batch();
+        chunk.forEach(id => batch.delete(db.collection('ship_orders').doc(id)));
+        await batch.commit();
+      }
+    }
   } else {
     console.log('Could not fetch shipping orders this run — leaving ship_orders untouched (no cleanup)');
   }
