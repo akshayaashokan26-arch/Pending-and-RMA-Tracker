@@ -216,7 +216,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="pg" id="pg-zd">
   <div class="tb">
     <h2>Pending tickets</h2>
-    <span style="font-size:12px;color:var(--text3)">Live from Zendesk (GPSandTrack Support brand) — refreshes every 5 min while this tab is open</span>
+    <span style="font-size:12px;color:var(--text3)">GPSandTrack Support brand — synced every ~10 min via GitHub Actions</span>
     <button class="btn" onclick="syncZendesk()"><i class="ti ti-refresh" aria-hidden="true"></i> Refresh now</button>
   </div>
   <div class="filters">
@@ -346,9 +346,6 @@ function startListen(){
   onSnapshot(collection(db,'rma_records'),s=>{rmaRecords=s.docs.map(d=>({id:d.id,...d.data()}));boot();setSyncing(false,'live');});
   onSnapshot(collection(db,'ship_orders'),s=>{shipOrders=s.docs.map(d=>({id:d.id,...d.data()}));renderShipping();updateNotifs();});
   onSnapshot(collection(db,'zd_tickets'),s=>{zdTickets=s.docs.map(d=>({id:d.id,...d.data()}));renderRMA();updateNotifs();renderZdPending();});
-  // Auto-sync Zendesk every 5 minutes
-  syncZendesk();
-  setInterval(syncZendesk, 5*60*1000);
 }
 
 function setSyncing(a,l){document.getElementById('dot').className='dot'+(a?' spin':'');if(l)document.getElementById('slbl').textContent=l;}
@@ -931,80 +928,22 @@ async function importZendesk(payload){
 }
 
 
-// ── Zendesk API sync ──────────────────────────────────────────────
-const ZD_DOMAIN = 'tracksupport.zendesk.com';
-const ZD_EMAIL  = 'akshaya.ashok@sievanetworks2.com';
-const ZD_TOKEN  = 'PnzJE5bxl8SvlFgg0DNZNVB5y42mq75NoQiBkEJs';
-const ZD_AUTH   = 'Basic ' + btoa(ZD_EMAIL + '/token:' + ZD_TOKEN);
-const ZD_BRAND_NAME = 'GPSandTrack Support'; // only show pending tickets from this brand
-
-let zdBrandId = null; // cached after first lookup so we don't re-fetch every 5 min
-async function getZdBrandId(){
-  if(zdBrandId!==null) return zdBrandId;
-  try{
-    const r=await fetch(`https://${ZD_DOMAIN}/api/v2/brands.json`,{headers:{'Authorization':ZD_AUTH,'Content-Type':'application/json'}});
-    if(!r.ok){console.warn('ZD brands lookup failed:',r.status);return null;}
-    const data=await r.json();
-    const match=(data.brands||[]).find(b=>(b.name||'').trim().toLowerCase()===ZD_BRAND_NAME.trim().toLowerCase());
-    if(!match){console.warn(`ZD brand "${ZD_BRAND_NAME}" not found — showing all pending tickets instead`);return null;}
-    zdBrandId=match.id;
-    return zdBrandId;
-  }catch(e){console.warn('ZD brands lookup error:',e.message);return null;}
-}
+// ── Zendesk pending tickets ──────────────────────────────────────
+// Ticket data is fetched server-side by sync.js (GitHub Actions, hourly) —
+// calling the Zendesk API directly from the browser doesn't work because
+// Zendesk doesn't allow cross-origin requests from this site (CORS).
+// This just re-reads the zd_tickets collection Firestore already keeps live
+// via onSnapshot; "Refresh now" exists mainly for a manual re-render.
+const ZD_DOMAIN = 'tracksupport.zendesk.com'; // used only to build the "Open in Zendesk" link
 
 async function syncZendesk(){
   try{
-    setSyncing(true,'syncing Zendesk…');
-    let allTickets=[];
-    const brandId=await getZdBrandId();
-    // Search API when we have a brand to scope to (returns full ticket objects
-    // under "results"); plain ticket list as a fallback if brand lookup failed.
-    let url=brandId
-      ? `https://${ZD_DOMAIN}/api/v2/search.json?query=${encodeURIComponent(`type:ticket status:pending brand:${brandId}`)}&per_page=100`
-      : `https://${ZD_DOMAIN}/api/v2/tickets.json?status=pending&per_page=100`;
-    while(url){
-      const r=await fetch(url,{headers:{'Authorization':ZD_AUTH,'Content-Type':'application/json'}});
-      if(!r.ok){console.warn('ZD API error:',r.status);break;}
-      const data=await r.json();
-      const rows=data.results||data.tickets||[];
-      const tickets=rows.map(t=>({
-        id:'zd'+t.id,
-        ticket:String(t.id),
-        status:'pending',
-        subject:(t.subject||'').slice(0,100),
-        requester:String(t.requester_id||''),
-        assignee:String(t.assignee_id||''),
-        updated:t.updated_at||'',
-        created:t.created_at||'',
-      }));
-      allTickets=[...allTickets,...tickets];
-      url=data.next_page||null;
-    }
-    // Preserve manual follow-up tracking across syncs — the API call above
-    // has no idea about lastFollowUp, so carry it over from what's already loaded.
-    const prevById={};
-    zdTickets.forEach(z=>{prevById[z.id]=z;});
-    allTickets=allTickets.map(t=>prevById[t.id]?{...t,lastFollowUp:prevById[t.id].lastFollowUp||null}:{...t,lastFollowUp:null});
-
-    // Anything that WAS pending last time but isn't in the fresh list anymore
-    // has been resolved/closed on Zendesk — remove it so it stops being counted
-    // as pending here too (mirrors the rma_records cleanup).
-    const freshIds=new Set(allTickets.map(t=>t.id));
-    const resolved=zdTickets.filter(z=>!freshIds.has(z.id));
-    if(resolved.length) await Promise.all(resolved.map(z=>delDoc('zd_tickets',z.id)));
-
-    if(allTickets.length>0){
-      await saveAll('zd_tickets',allTickets);
-      zdTickets=allTickets;
-      renderRMA();updateNotifs();renderZdPending();
-      setSyncing(false,'ZD synced: '+allTickets.length+' pending · '+now());
-    }else{
-      zdTickets=[];
-      renderZdPending();
-      setSyncing(false,'ZD: 0 pending · '+now());
-    }
+    setSyncing(true,'refreshing…');
+    zdTickets=await fetchCol('zd_tickets');
+    renderRMA();updateNotifs();renderZdPending();
+    setSyncing(false,'synced '+now());
   }catch(e){
-    console.warn('Zendesk sync failed:',e.message);
+    console.warn('Zendesk refresh failed:',e.message);
     setSyncing(false,'connected · '+now());
   }
 }
