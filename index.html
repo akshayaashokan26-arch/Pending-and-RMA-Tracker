@@ -97,6 +97,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* Shipping cards */
 .ship-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px;display:flex;align-items:flex-start;gap:12px}
+.zd-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px}
+.zd-card-top{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
 .ship-card.pending-ship{border-left:4px solid #ef9f27}
 .ship-card.reviewed-ship{border-left:4px solid #639922;opacity:.7}
 .ship-info{flex:1;min-width:0}
@@ -166,6 +168,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <button class="ttab on" onclick="go('dash',this)">Dashboard</button>
   <button class="ttab" onclick="go('rma',this)">RMA checklist</button>
   <button class="ttab" onclick="go('shipping',this)">Shipping orders</button>
+  <button class="ttab" onclick="go('zd',this)">Pending tickets</button>
   <button class="ttab" onclick="go('monthly',this)">Monthly report</button>
   <div class="top-r">
     <span class="dot" id="dot"></span>
@@ -229,6 +232,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
   <div id="ship-list" class="cards"></div>
   <div class="empty" id="ship-empty" style="display:none"><i class="ti ti-truck" aria-hidden="true"></i><p>No shipping orders. Paste data from Job Scheduler shipping tool.</p></div>
+</div>
+
+<!-- ZENDESK PENDING TICKETS -->
+<div class="pg" id="pg-zd">
+  <div class="tb">
+    <h2>Pending tickets</h2>
+    <span style="font-size:12px;color:var(--text3)">Live from Zendesk — refreshes every 5 min while this tab is open</span>
+    <button class="btn" onclick="syncZendesk()"><i class="ti ti-refresh" aria-hidden="true"></i> Refresh now</button>
+  </div>
+  <div class="filters">
+    <input type="text" id="fs-zd" placeholder="Search ticket, subject…" oninput="renderZdPending()">
+    <select id="ff-zd-fu" onchange="renderZdPending()">
+      <option value="">All</option>
+      <option value="never">Never followed up</option>
+      <option value="overdue">Overdue (2+ days)</option>
+      <option value="today">Followed up today</option>
+    </select>
+  </div>
+  <div id="zd-list" class="cards"></div>
+  <div class="empty" id="zd-empty" style="display:none"><i class="ti ti-ticket" aria-hidden="true"></i><p>No pending Zendesk tickets right now — you're all caught up.</p></div>
 </div>
 
 <!-- MONTHLY REPORT -->
@@ -344,7 +367,7 @@ async function fullSync(){
 function startListen(){
   onSnapshot(collection(db,'rma_records'),s=>{rmaRecords=s.docs.map(d=>({id:d.id,...d.data()}));boot();setSyncing(false,'live');});
   onSnapshot(collection(db,'ship_orders'),s=>{shipOrders=s.docs.map(d=>({id:d.id,...d.data()}));renderShipping();updateNotifs();});
-  onSnapshot(collection(db,'zd_tickets'),s=>{zdTickets=s.docs.map(d=>({id:d.id,...d.data()}));renderRMA();updateNotifs();});
+  onSnapshot(collection(db,'zd_tickets'),s=>{zdTickets=s.docs.map(d=>({id:d.id,...d.data()}));renderRMA();updateNotifs();renderZdPending();});
   // Auto-sync Zendesk every 5 minutes
   syncZendesk();
   setInterval(syncZendesk, 5*60*1000);
@@ -369,6 +392,10 @@ const CL=[
 ];
 
 function needsCL(r){return r.devStatus==='Replacement Device Sent'||r.devStatus==='Advance Replacement'||r.testResult==='Fail';}
+// "Needs follow-up" = still sitting in the portal's Device Status tab.
+// Once it moves to Completed in the portal, the next sync overwrites stage
+// to 'Completed' and it drops out of this count automatically.
+function needsFollowUp(r){return r.stage==='Device Status';}
 function isClosed(r){
   if(!needsCL(r))return r.devStatus==='Device Returned to Customer'||r.devStatus==='Battery Replaced';
   return !!((r.cl||{}).c7);
@@ -407,7 +434,7 @@ function zdBadge(ticket){
 // ── Notifications ─────────────────────────────────────────────────
 function updateNotifs(){
   // Find RMAs that need action: replacement sent but checklist incomplete
-  const needsAction=rmaRecords.filter(isRecent).filter(r=>needsCL(r)&&!isClosed(r));
+  const needsAction=rmaRecords.filter(isRecent).filter(needsFollowUp);
   // Find shipping orders that are still pending
   const pendingShip=shipOrders.filter(isRecent).filter(s=>s.status==='PENDING');
   const total=needsAction.length+pendingShip.length;
@@ -450,7 +477,7 @@ function renderDash(){
   const battery=rma.filter(r=>r.devStatus==='Battery Replaced').length;
   const oow=rma.filter(r=>r.warranty==='No Warranty').length;
   const oowRep=rma.filter(r=>r.warranty==='No Warranty'&&(r.devStatus==='Replacement Device Sent'||r.devStatus==='Advance Replacement')).length;
-  const pendingRMA=rma.filter(r=>needsCL(r)&&!isClosed(r)).length;
+  const pendingRMA=rma.filter(needsFollowUp).length;
   const pendingShip=ship.filter(s=>s.status==='PENDING').length;
 
   document.getElementById('dash-kpis').innerHTML=[
@@ -477,7 +504,7 @@ function renderDash(){
 
   // Pending actions list
   const needsAction=[
-    ...rmaRecords.filter(isRecent).filter(r=>needsCL(r)&&!isClosed(r)).map(r=>({type:'rma',r})),
+    ...rmaRecords.filter(isRecent).filter(needsFollowUp).map(r=>({type:'rma',r})),
     ...shipOrders.filter(isRecent).filter(s=>s.status==='PENDING').map(s=>({type:'ship',s})),
   ];
   const el=document.getElementById('pending-actions'),em=document.getElementById('pending-empty');
@@ -521,13 +548,13 @@ function renderRMA(){
   let list=rmaRecords.filter(isRecent).filter(r=>{
     if(mf&&mk(r.date)!==mf)return false;
     if(rf&&r.testResult!==rf)return false;
-    if(sf==='open'&&isClosed(r))return false;
-    if(sf==='closed'&&!isClosed(r))return false;
-    if(sf==='overdue'&&(isClosed(r)||(daysOpen(r)||0)<15))return false;
+    if(sf==='open'&&!needsFollowUp(r))return false;
+    if(sf==='closed'&&needsFollowUp(r))return false;
+    if(sf==='overdue'&&(!needsFollowUp(r)||(daysOpen(r)||0)<15))return false;
     if(inc==='1'&&pct(r).p===100)return false;
     if(search){const h=[r.ticket,r.customer,r.imei,r.device,r.newImei,r.tracking].join(' ').toLowerCase();if(!h.includes(search))return false;}
     return true;
-  }).sort((a,b)=>{const ac=isClosed(a)?1:0,bc=isClosed(b)?1:0;if(ac!==bc)return ac-bc;return(daysOpen(b)||0)-(daysOpen(a)||0);});
+  }).sort((a,b)=>{const ac=needsFollowUp(a)?0:1,bc=needsFollowUp(b)?0:1;if(ac!==bc)return ac-bc;return(daysOpen(b)||0)-(daysOpen(a)||0);});
   const el=document.getElementById('rma-list'),em=document.getElementById('rma-empty');
   if(!list.length){el.innerHTML='';em.style.display='block';return;}
   em.style.display='none';
@@ -1028,14 +1055,27 @@ async function syncZendesk(){
       allTickets=[...allTickets,...tickets];
       url=data.next_page||null;
     }
+    // Preserve manual follow-up tracking across syncs — the API call above
+    // has no idea about lastFollowUp, so carry it over from what's already loaded.
+    const prevById={};
+    zdTickets.forEach(z=>{prevById[z.id]=z;});
+    allTickets=allTickets.map(t=>prevById[t.id]?{...t,lastFollowUp:prevById[t.id].lastFollowUp||null}:{...t,lastFollowUp:null});
+
+    // Anything that WAS pending last time but isn't in the fresh list anymore
+    // has been resolved/closed on Zendesk — remove it so it stops being counted
+    // as pending here too (mirrors the rma_records cleanup).
+    const freshIds=new Set(allTickets.map(t=>t.id));
+    const resolved=zdTickets.filter(z=>!freshIds.has(z.id));
+    if(resolved.length) await Promise.all(resolved.map(z=>delDoc('zd_tickets',z.id)));
+
     if(allTickets.length>0){
       await saveAll('zd_tickets',allTickets);
       zdTickets=allTickets;
-      renderRMA();updateNotifs();
+      renderRMA();updateNotifs();renderZdPending();
       setSyncing(false,'ZD synced: '+allTickets.length+' pending · '+now());
     }else{
-      // No pending tickets — clear old ones
       zdTickets=[];
+      renderZdPending();
       setSyncing(false,'ZD: 0 pending · '+now());
     }
   }catch(e){
@@ -1044,12 +1084,63 @@ async function syncZendesk(){
   }
 }
 
+// ── Pending tickets follow-up tracking ──────────────────────────────
+async function markFollowedUp(id){
+  const t=zdTickets.find(z=>z.id===id);
+  if(!t)return;
+  t.lastFollowUp=new Date().toISOString();
+  await saveDoc('zd_tickets',t);
+  renderZdPending();
+  toast('✓ Marked followed up today');
+}
+function daysSince(iso){
+  if(!iso)return null;
+  const d=new Date(iso);if(isNaN(d))return null;
+  return Math.floor((Date.now()-d)/864e5);
+}
+function renderZdPending(){
+  const el=document.getElementById('zd-list'),em=document.getElementById('zd-empty');
+  if(!el)return;
+  const search=(document.getElementById('fs-zd')?.value||'').toLowerCase();
+  const fu=document.getElementById('ff-zd-fu')?.value||'';
+  let list=[...zdTickets].filter(t=>{
+    if(search&&!(t.ticket+' '+(t.subject||'')).toLowerCase().includes(search))return false;
+    const d=daysSince(t.lastFollowUp);
+    if(fu==='never'&&t.lastFollowUp)return false;
+    if(fu==='overdue'&&!(d===null||d>=2))return false;
+    if(fu==='today'&&!(d===0))return false;
+    return true;
+  });
+  // Most overdue first — tickets never followed up sort to the very top
+  list.sort((a,b)=>{
+    const da=daysSince(a.lastFollowUp),db=daysSince(b.lastFollowUp);
+    const va=da===null?9999:da, vb=db===null?9999:db;
+    return vb-va;
+  });
+  if(!list.length){el.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  el.innerHTML=list.map(t=>{
+    const d=daysSince(t.lastFollowUp);
+    const statusBadge=d===null?badge('Never followed up','b-red'):d===0?badge('Followed up today','b-green'):d>=2?badge(`⚠ ${d} days since follow-up`,'b-red'):badge(`${d} day${d>1?'s':''} since follow-up`,'b-amber');
+    return `<div class="zd-card">
+      <div class="zd-card-top"><strong>#${t.ticket}</strong>${statusBadge}</div>
+      <div class="card-sub" style="margin-top:6px">${t.subject||'(no subject)'}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Created ${t.created?new Date(t.created).toLocaleDateString():'—'} · Updated ${t.updated?new Date(t.updated).toLocaleDateString():'—'}${t.lastFollowUp?' · Last follow-up '+new Date(t.lastFollowUp).toLocaleDateString():''}</div>
+      <div class="card-foot">
+        <a class="btn" href="https://${ZD_DOMAIN}/agent/tickets/${t.ticket}" target="_blank" rel="noopener"><i class="ti ti-external-link" aria-hidden="true"></i> Open in Zendesk</a>
+        <button class="btn green" onclick="markFollowedUp('${t.id}')"><i class="ti ti-check" aria-hidden="true"></i> Mark followed up today</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function go(pg,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ttab').forEach(b=>b.classList.remove('on'));
   document.getElementById('pg-'+pg).classList.add('on');btn.classList.add('on');
   if(pg==='monthly')renderMonthly();
   if(pg==='shipping')renderShipping();
+  if(pg==='zd')renderZdPending();
 }
 
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),3500);}
@@ -1062,6 +1153,7 @@ window.saveModal=saveModal;window.delRec=delRec;window.toggleCard=toggleCard;
 window.doStep=doStep;window.upd=upd;window.openPaste=openPaste;window.closePaste=closePaste;
 window.runImport=runImport;window.fullSync=fullSync;window.renderDash=renderDash;
 window.renderMonthly=renderMonthly;window.renderRMA=renderRMA;window.renderShipping=renderShipping;
+window.renderZdPending=renderZdPending;window.markFollowedUp=markFollowedUp;window.syncZendesk=syncZendesk;
 
 try{
   [rmaRecords,shipOrders,zdTickets]=await Promise.all([fetchCol('rma_records'),fetchCol('ship_orders'),fetchCol('zd_tickets')]);
